@@ -28,7 +28,8 @@ create table if not exists public.transactions (
   closing_date     date,
   price            numeric,
   notes            text not null default '',
-  created_at       date not null default current_date
+  created_at       date not null default current_date,
+  archived         boolean not null default false
 );
 
 create table if not exists public.tasks (
@@ -38,7 +39,8 @@ create table if not exists public.tasks (
   title          text not null,
   due_date       date,
   status         text not null default 'open' check (status in ('open', 'done', 'skipped')),
-  key            text
+  key            text,
+  category       text
 );
 
 create table if not exists public.documents (
@@ -56,6 +58,7 @@ create table if not exists public.email_drafts (
   user_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
   transaction_id uuid not null references public.transactions (id) on delete cascade,
   recipient_id   uuid not null references public.people (id),
+  recipient_email text,
   kind           text not null check (kind in ('welcome', 'follow-up')),
   subject        text not null,
   body           text not null,
@@ -68,7 +71,11 @@ create table if not exists public.settings (
   user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
   name    text not null default '',
   title   text not null default 'Transaction Coordinator',
-  company text not null default ''
+  company text not null default '',
+  default_transaction_type text not null default 'buyer'
+                           check (default_transaction_type in ('buyer', 'seller')),
+  follow_up_days integer not null default 7,
+  task_categories jsonb
 );
 
 -- Your edited checklists and email wording, one row per account.
@@ -77,6 +84,16 @@ create table if not exists public.templates (
   checklists jsonb not null,
   emails     jsonb not null
 );
+
+-- Columns added after the first release. On a database made earlier these
+-- add what is missing; on a new one they do nothing.
+alter table public.transactions add column if not exists archived boolean not null default false;
+alter table public.tasks add column if not exists category text;
+alter table public.email_drafts add column if not exists recipient_email text;
+alter table public.settings add column if not exists default_transaction_type text not null default 'buyer'
+  check (default_transaction_type in ('buyer', 'seller'));
+alter table public.settings add column if not exists follow_up_days integer not null default 7;
+alter table public.settings add column if not exists task_categories jsonb;
 
 -- Indexes: make "all tasks for this deal" style lookups fast.
 create index if not exists transactions_user_idx on public.transactions (user_id);
@@ -99,3 +116,6 @@ begin
          with check (user_id = (select auth.uid()))', t);
   end loop;
 end $$;
+
+-- Make Supabase notice the new tables and columns right away.
+notify pgrst, 'reload schema';

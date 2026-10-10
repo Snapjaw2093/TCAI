@@ -25,6 +25,8 @@ export type Transaction = {
   price: number | null;
   notes: string;
   createdAt: string;
+  // Archived deals are hidden from lists and the dashboard but never deleted.
+  archived: boolean;
 };
 
 export type Task = {
@@ -35,6 +37,8 @@ export type Task = {
   status: "open" | "done" | "skipped";
   // Set on tasks the app knows how to complete itself, e.g. "welcome-email".
   key?: string;
+  // One of the task categories from Settings, e.g. "Title & escrow".
+  category?: string;
 };
 
 export type DocumentItem = {
@@ -50,6 +54,9 @@ export type EmailDraft = {
   id: string;
   transactionId: string;
   recipientId: string;
+  // The address the draft is "to". Starts as the person's email but can be
+  // edited, so it is stored on the draft itself.
+  recipientEmail: string;
   kind: "welcome" | "follow-up";
   subject: string;
   body: string;
@@ -58,17 +65,36 @@ export type EmailDraft = {
   sentAt: string | null;
 };
 
-// Who is writing the emails. Used for the signature at the bottom of each draft.
+export const defaultTaskCategories = [
+  "Communication",
+  "Contract",
+  "Disclosures",
+  "Title & escrow",
+  "Inspection & appraisal",
+  "Financing",
+  "Closing",
+];
+
+// Your signature plus app-wide defaults.
 export type Settings = {
   name: string;
   title: string;
   company: string;
+  // Which side the "New transaction" form starts on.
+  defaultTransactionType: TransactionType;
+  // How many days ahead the Follow-ups page and dashboard look.
+  followUpDays: number;
+  // The labels tasks can be filed under.
+  taskCategories: string[];
 };
 
 export const defaultSettings: Settings = {
   name: "",
   title: "Transaction Coordinator",
   company: "",
+  defaultTransactionType: "buyer",
+  followUpDays: 7,
+  taskCategories: defaultTaskCategories,
 };
 
 // ---- Templates you can edit on the Templates page ----
@@ -82,6 +108,7 @@ export type TaskTemplate = {
   due?: DueRule | null;
   // Marks a task the app can tick off itself, e.g. "welcome-email".
   key?: string;
+  category?: string;
 };
 
 export type DocumentTemplate = {

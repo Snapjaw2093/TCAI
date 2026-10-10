@@ -40,5 +40,9 @@ export interface DataStore {
   getTemplates(): Promise<UserTemplates>;
   saveTemplates(templates: UserTemplates): Promise<void>;
 
+  // Names of anything the database is missing (empty = ready). Only the
+  // cloud version can be out of date.
+  checkSchema(): Promise<string[]>;
+
   resetToSampleData(): Promise<void>;
 }

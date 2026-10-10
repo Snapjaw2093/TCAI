@@ -6,7 +6,7 @@ export default function Page() {
     <>
       <PageHeader
         title="New transaction"
-        description="Capture the client, agent, and property details."
+        description="Step 1 of onboarding: enter the deal details. We generate the checklist and welcome emails for you."
       />
       <TransactionForm />
     </>

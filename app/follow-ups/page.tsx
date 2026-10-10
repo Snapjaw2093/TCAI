@@ -1,14 +1,14 @@
-import FollowUpsView from "@/components/FollowUpsView";
+import EmailFollowUpsView from "@/components/EmailFollowUpsView";
 import PageHeader from "@/components/PageHeader";
 
 export default function Page() {
   return (
     <>
       <PageHeader
-        title="Follow-ups"
-        description="Overdue and upcoming items across all deals."
+        title="Email & Follow-ups"
+        description="See what needs chasing, draft the emails, and track what you've sent."
       />
-      <FollowUpsView />
+      <EmailFollowUpsView />
     </>
   );
 }

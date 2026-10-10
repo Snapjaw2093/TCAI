@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "Dashboard" },
   { href: "/transactions", label: "Transactions" },
-  { href: "/follow-ups", label: "Follow-ups" },
-  { href: "/settings/templates", label: "Templates" },
+  { href: "/onboarding", label: "Onboarding" },
+  { href: "/follow-ups", label: "Email & Follow-ups" },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -21,10 +21,7 @@ export default function Sidebar({
   const pathname = usePathname();
 
   // "/" only matches itself; other links also match their sub-pages.
-  const isActive = (href: string) =>
-    href === "/" || href === "/settings"
-      ? pathname === href
-      : pathname.startsWith(href);
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
     <aside className="border-b border-slate-200 bg-white md:flex md:min-h-screen md:w-60 md:flex-col md:border-b-0 md:border-r">

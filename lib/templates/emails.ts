@@ -246,7 +246,7 @@ const sampleAgent: Person = { id: "a", name: "Dana Whitfield", email: "dana@exam
 const sampleDeal: Transaction = {
   id: "t", type: "buyer", status: "active", propertyAddress: "42 Maple Street",
   clientId: "c", agentId: "a", contractDate: "2026-10-06", closingDate: "2026-11-05",
-  price: 425000, notes: "", createdAt: "2026-10-06",
+  price: 425000, notes: "", createdAt: "2026-10-06", archived: false,
 };
 
 // Shows what a template would produce for a made-up deal.

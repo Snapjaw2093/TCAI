@@ -26,7 +26,7 @@ function client() {
 
 // Throws a readable error if a request failed.
 function check<T>(result: { data: T; error: { message: string } | null }): T {
-  if (result.error) throw new Error(result.error.message);
+  if (result.error) throw new Error(result.error.message || "The request to the database failed.");
   return result.data;
 }
 
@@ -61,6 +61,7 @@ const transactionFromRow = (r: Row): Transaction => ({
   price: r.price == null ? null : Number(r.price),
   notes: str(r.notes),
   createdAt: str(r.created_at),
+  archived: Boolean(r.archived),
 });
 const transactionToRow = (t: Omit<Transaction, "id">) => ({
   type: t.type,
@@ -73,6 +74,7 @@ const transactionToRow = (t: Omit<Transaction, "id">) => ({
   price: t.price,
   notes: t.notes,
   created_at: t.createdAt,
+  archived: t.archived,
 });
 
 const taskFromRow = (r: Row): Task => ({
@@ -82,6 +84,7 @@ const taskFromRow = (r: Row): Task => ({
   dueDate: nullable(r.due_date),
   status: r.status as Task["status"],
   key: r.key == null ? undefined : str(r.key),
+  category: r.category == null ? undefined : str(r.category),
 });
 const taskToRow = (t: Omit<Task, "id">) => ({
   transaction_id: t.transactionId,
@@ -89,6 +92,7 @@ const taskToRow = (t: Omit<Task, "id">) => ({
   due_date: t.dueDate,
   status: t.status,
   key: t.key ?? null,
+  category: t.category ?? null,
 });
 
 const documentFromRow = (r: Row): DocumentItem => ({
@@ -111,6 +115,7 @@ const draftFromRow = (r: Row): EmailDraft => ({
   id: str(r.id),
   transactionId: str(r.transaction_id),
   recipientId: str(r.recipient_id),
+  recipientEmail: str(r.recipient_email),
   kind: r.kind as EmailDraft["kind"],
   subject: str(r.subject),
   body: str(r.body),
@@ -121,6 +126,7 @@ const draftFromRow = (r: Row): EmailDraft => ({
 const draftToRow = (d: Omit<EmailDraft, "id">) => ({
   transaction_id: d.transactionId,
   recipient_id: d.recipientId,
+  recipient_email: d.recipientEmail,
   kind: d.kind,
   subject: d.subject,
   body: d.body,
@@ -170,7 +176,12 @@ export async function importDatabase(source: Db) {
 
   const transactions = source.transactions.map((t) => ({
     id: fresh(t.id),
-    ...transactionToRow({ ...t, clientId: link(t.clientId), agentId: link(t.agentId) }),
+    ...transactionToRow({
+      ...t,
+      archived: t.archived ?? false,
+      clientId: link(t.clientId),
+      agentId: link(t.agentId),
+    }),
   }));
   if (transactions.length) check(await c.from("transactions").insert(transactions));
 
@@ -183,7 +194,12 @@ export async function importDatabase(source: Db) {
   if (documents.length) check(await c.from("documents").insert(documents));
 
   const drafts = source.drafts.map((d) =>
-    draftToRow({ ...d, transactionId: link(d.transactionId), recipientId: link(d.recipientId) }),
+    draftToRow({
+      ...d,
+      recipientEmail: d.recipientEmail ?? "",
+      transactionId: link(d.transactionId),
+      recipientId: link(d.recipientId),
+    }),
   );
   if (drafts.length) check(await c.from("email_drafts").insert(drafts));
 }
@@ -205,25 +221,54 @@ export const supabaseStore: DataStore = {
   listDocuments: (transactionId) => list("documents", documentFromRow, "due_date", transactionId),
   saveDocument: (d) => save("documents", d, documentToRow, documentFromRow),
 
-  listDrafts: (transactionId) => list("email_drafts", draftFromRow, "created_at", transactionId),
+  async listDrafts(transactionId) {
+    const drafts = await list("email_drafts", draftFromRow, "created_at", transactionId);
+    // Drafts made before editable recipients have no address saved yet.
+    if (drafts.every((d) => d.recipientEmail)) return drafts;
+    const people = await list("people", personFromRow, "name");
+    return drafts.map((d) => ({
+      ...d,
+      recipientEmail: d.recipientEmail || people.find((p) => p.id === d.recipientId)?.email || "",
+    }));
+  },
   saveDraft: (d) => save("email_drafts", d, draftToRow, draftFromRow),
   async deleteDraft(id) {
     check(await client().from("email_drafts").delete().eq("id", id));
   },
 
   async getSettings(): Promise<Settings> {
-    const data = check(await client().from("settings").select("*").maybeSingle()) as Row | null;
+    const data = check(await client().from("settings").select("*").maybeSingle()) as
+      | (Row & { task_categories?: unknown })
+      | null;
     if (!data) return defaultSettings;
-    return { name: str(data.name), title: str(data.title), company: str(data.company) };
+    const categories = Array.isArray(data.task_categories)
+      ? data.task_categories.filter((c): c is string => typeof c === "string")
+      : [];
+    return {
+      name: str(data.name),
+      title: str(data.title),
+      company: str(data.company),
+      defaultTransactionType: data.default_transaction_type === "seller" ? "seller" : "buyer",
+      followUpDays: Number(data.follow_up_days) || defaultSettings.followUpDays,
+      taskCategories: categories.length ? categories : defaultSettings.taskCategories,
+    };
   },
   // One settings row per account: update it if it exists, otherwise add it.
   async saveSettings(settings) {
     const c = client();
+    const row = {
+      name: settings.name,
+      title: settings.title,
+      company: settings.company,
+      default_transaction_type: settings.defaultTransactionType,
+      follow_up_days: settings.followUpDays,
+      task_categories: settings.taskCategories,
+    };
     const existing = check(await c.from("settings").select("user_id").maybeSingle()) as Row | null;
     if (existing) {
-      check(await c.from("settings").update(settings).eq("user_id", String(existing.user_id)));
+      check(await c.from("settings").update(row).eq("user_id", String(existing.user_id)));
     } else {
-      check(await c.from("settings").insert(settings));
+      check(await c.from("settings").insert(row));
     }
   },
 
@@ -243,6 +288,35 @@ export const supabaseStore: DataStore = {
     } else {
       check(await c.from("templates").insert(templates));
     }
+  },
+
+  // Looks for the columns and tables added over time. A missing one means
+  // supabase/schema.sql needs re-running (it is safe to run again).
+  async checkSchema() {
+    const probes: [string, string][] = [
+      ["transactions", "archived"],
+      ["tasks", "category"],
+      ["email_drafts", "recipient_email"],
+      ["settings", "default_transaction_type"],
+      ["settings", "follow_up_days"],
+      ["settings", "task_categories"],
+      ["templates", "user_id"],
+    ];
+    const c = client();
+    const results = await Promise.all(
+      probes.map(([table, column]) => c.from(table).select(column).limit(1)),
+    );
+    const missing: string[] = [];
+    results.forEach((r, i) => {
+      if (!r.error) return;
+      // Only "doesn't exist" errors count; anything else (network, login) is a real error.
+      if (/does not exist|could not find|schema cache/i.test(r.error.message)) {
+        missing.push(`${probes[i][0]}.${probes[i][1]}`);
+      } else {
+        throw new Error(r.error.message || "Could not reach the database.");
+      }
+    });
+    return missing;
   },
 
   // Deletes everything this account has, then adds the two sample deals.
