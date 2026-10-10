@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { db } from "@/lib/data";
+import { applyTemplate } from "@/lib/data/checklist";
 import type { Person, TransactionType } from "@/lib/types";
 
 const inputClass =
@@ -73,6 +74,7 @@ export default function TransactionForm() {
       notes: get("notes"),
       createdAt: new Date().toISOString().slice(0, 10),
     });
+    await applyTemplate(transaction);
     router.push(`/transactions/${transaction.id}`);
   }
 

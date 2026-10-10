@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import ChecklistPanel from "@/components/ChecklistPanel";
+import DocumentList from "@/components/DocumentList";
+import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
+import { applyTemplate } from "@/lib/data/checklist";
 import { db } from "@/lib/data";
 import { formatDate, formatPrice, relativeDays } from "@/lib/format";
 import type {
@@ -11,6 +15,7 @@ import type {
   Person,
   Task,
   Transaction,
+  TransactionStatus,
 } from "@/lib/types";
 
 type Loaded = {
@@ -76,6 +81,28 @@ export default function TransactionDetail({ id }: { id: string }) {
     load();
   }, [id]);
 
+  async function updateTask(task: Task) {
+    await db.saveTask(task);
+    setData((d) => d && { ...d, tasks: d.tasks.map((x) => (x.id === task.id ? task : x)) });
+  }
+
+  async function updateDocument(doc: DocumentItem) {
+    await db.saveDocument(doc);
+    setData((d) => d && { ...d, documents: d.documents.map((x) => (x.id === doc.id ? doc : x)) });
+  }
+
+  async function updateStatus(status: TransactionStatus) {
+    if (!data) return;
+    const transaction = await db.saveTransaction({ ...data.transaction, status });
+    setData({ ...data, transaction });
+  }
+
+  async function generateChecklist() {
+    if (!data) return;
+    const { tasks, documents } = await applyTemplate(data.transaction);
+    setData({ ...data, tasks, documents });
+  }
+
   if (data === undefined) return <p className="text-sm text-slate-500">Loading…</p>;
 
   if (data === null) {
@@ -90,11 +117,14 @@ export default function TransactionDetail({ id }: { id: string }) {
   }
 
   const { transaction: t, client, agent, tasks, documents, drafts } = data;
-  const counts: Record<Tab, number | null> = {
+  const tasksDone = tasks.filter((x) => x.status !== "open").length;
+  const requiredDocs = documents.filter((x) => x.required);
+  const requiredReceived = requiredDocs.filter((x) => x.status === "received").length;
+  const counts: Record<Tab, string | null> = {
     Overview: null,
-    Checklist: tasks.length,
-    Documents: documents.length,
-    Emails: drafts.length,
+    Checklist: tasks.length ? `${tasksDone}/${tasks.length}` : null,
+    Documents: requiredDocs.length ? `${requiredReceived}/${requiredDocs.length}` : null,
+    Emails: drafts.length ? String(drafts.length) : null,
   };
 
   return (
@@ -108,6 +138,17 @@ export default function TransactionDetail({ id }: { id: string }) {
         <span className="text-sm text-slate-500">
           {t.type === "buyer" ? "Buyer side" : "Seller side"}
         </span>
+        <select
+          value={t.status}
+          onChange={(e) => updateStatus(e.target.value as TransactionStatus)}
+          aria-label="Change status"
+          className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm"
+        >
+          <option value="active">Active</option>
+          <option value="pending">Pending</option>
+          <option value="closed">Closed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
 
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-slate-200">
@@ -132,6 +173,12 @@ export default function TransactionDetail({ id }: { id: string }) {
       {tab === "Overview" ? (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
+            <ProgressBar label="Tasks complete" done={tasksDone} total={tasks.length} />
+            <ProgressBar
+              label="Required documents received"
+              done={requiredReceived}
+              total={requiredDocs.length}
+            />
             <PersonCard title="Client" person={client} />
             <PersonCard title="Agent" person={agent} />
             <DateCard title="Contract date" date={t.contractDate} />
@@ -150,11 +197,30 @@ export default function TransactionDetail({ id }: { id: string }) {
             )}
           </div>
         </div>
+      ) : tab === "Checklist" || tab === "Documents" ? (
+        tasks.length === 0 && documents.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+            <p className="font-medium text-slate-900">No checklist yet</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Build tasks and required documents from the {t.type} template.
+            </p>
+            <button
+              onClick={generateChecklist}
+              className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            >
+              Generate checklist
+            </button>
+          </div>
+        ) : tab === "Checklist" ? (
+          <ChecklistPanel tasks={tasks} onChange={updateTask} />
+        ) : (
+          <DocumentList documents={documents} onChange={updateDocument} />
+        )
       ) : (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-          <p className="font-medium text-slate-900">{tab} are coming in the next stage</p>
+          <p className="font-medium text-slate-900">Emails are coming in the next stage</p>
           <p className="mt-1 text-sm text-slate-500">
-            This deal has {counts[tab]} saved so far.
+            This deal has {drafts.length} saved so far.
           </p>
         </div>
       )}

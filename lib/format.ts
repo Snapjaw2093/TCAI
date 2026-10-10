@@ -19,3 +19,9 @@ export function relativeDays(date: string | null): string {
   if (n === -1) return "yesterday";
   return n > 0 ? `in ${n} days` : `${-n} days ago`;
 }
+
+// True when a due date (YYYY-MM-DD) is before today. Dates are plain text,
+// so comparing them as text works.
+export function isOverdue(date: string | null): boolean {
+  return !!date && date < format(new Date(), "yyyy-MM-dd");
+}
