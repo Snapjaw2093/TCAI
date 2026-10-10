@@ -1,4 +1,5 @@
-import { formatDate } from "@/lib/format";
+import { dueLabel, formatDate } from "@/lib/format";
+import type { FollowUpItem } from "@/lib/followups";
 import type { DocumentItem, Person, Transaction } from "@/lib/types";
 
 // Email wording lives here as plain text with blanks filled from the deal.
@@ -62,4 +63,61 @@ export function buildWelcomeEmail(
     `In the meantime, feel free to reply to this email with any questions.\n\n` +
     signature;
   return { subject, body };
+}
+
+const itemLine = (item: FollowUpItem) =>
+  `- ${item.title} (${formatDate(item.dueDate)}, ${dueLabel(item.daysUntil)})`;
+
+function section(heading: string, items: FollowUpItem[]): string {
+  return items.length ? `${heading}\n${items.map(itemLine).join("\n")}\n\n` : "";
+}
+
+export function buildFollowUpEmail(
+  recipient: Person,
+  transaction: Transaction,
+  client: Person,
+  agent: Person,
+  items: FollowUpItem[],
+): DraftContent {
+  const t = transaction;
+  const documents = items.filter((i) => i.kind === "document");
+  const tasks = items.filter((i) => i.kind === "task");
+  const closing = items.find((i) => i.kind === "closing");
+  const anyLate = items.some((i) => i.daysUntil < 0 && i.kind !== "closing");
+  const closingLine = closing
+    ? `A reminder that closing is ${
+        closing.daysUntil < 0
+          ? `scheduled for ${formatDate(closing.dueDate)}`
+          : `${formatDate(closing.dueDate)} (${dueLabel(closing.daysUntil).replace("due ", "")})`
+      }.\n\n`
+    : "";
+
+  if (recipient.role === "agent") {
+    const body =
+      `Hi ${firstName(agent)},\n\n` +
+      `Here's where ${t.propertyAddress} (client: ${client.name}) stands:\n\n` +
+      section("Documents outstanding", documents) +
+      section("Tasks needing attention", tasks) +
+      closingLine +
+      `Let me know if you can help move anything along or if anything has changed on your end.\n\n` +
+      signature;
+    return { subject: `Status update: ${t.propertyAddress}`, body };
+  }
+
+  const body =
+    `Hi ${firstName(client)},\n\n` +
+    (anyLate
+      ? `I'm following up on a few items for ${t.propertyAddress} that are now past due.\n\n`
+      : `A quick note on what's coming up for ${t.propertyAddress}.\n\n`) +
+    section("What we still need from you", documents) +
+    closingLine +
+    `If you've already sent any of these, just let me know and I'll update my records. ` +
+    `Happy to answer any questions.\n\n` +
+    signature;
+  return {
+    subject: anyLate
+      ? `Follow-up: items needed for ${t.propertyAddress}`
+      : `Heads-up: upcoming items for ${t.propertyAddress}`,
+    body,
+  };
 }

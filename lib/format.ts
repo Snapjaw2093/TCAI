@@ -25,3 +25,10 @@ export function relativeDays(date: string | null): string {
 export function isOverdue(date: string | null): boolean {
   return !!date && date < format(new Date(), "yyyy-MM-dd");
 }
+
+// "3 days overdue", "due today", "due in 4 days"
+export function dueLabel(daysUntil: number): string {
+  if (daysUntil < 0) return `${-daysUntil} day${daysUntil === -1 ? "" : "s"} overdue`;
+  if (daysUntil === 0) return "due today";
+  return `due in ${daysUntil} day${daysUntil === 1 ? "" : "s"}`;
+}

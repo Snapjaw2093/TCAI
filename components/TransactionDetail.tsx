@@ -66,6 +66,9 @@ export default function TransactionDetail({ id }: { id: string }) {
 
   useEffect(() => {
     async function load() {
+      // Links like /transactions/abc#emails open straight to that tab.
+      const wanted = tabs.find((name) => name.toLowerCase() === window.location.hash.slice(1));
+      if (wanted) setTab(wanted);
       const transaction = await db.getTransaction(id);
       if (!transaction) {
         setData(null);
