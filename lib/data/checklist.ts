@@ -5,10 +5,12 @@ import type { Transaction } from "@/lib/types";
 // Fills a transaction with its tasks and required documents from the
 // templates, using the deal's own dates for the due dates.
 export async function applyTemplate(transaction: Transaction) {
+  const templates = await db.getTemplates();
   const list = buildChecklist(
     transaction.type,
     transaction.contractDate,
     transaction.closingDate,
+    templates.checklists,
   );
   const tasks = await Promise.all(
     list.tasks.map((t) => db.saveTask({ ...t, transactionId: transaction.id })),
@@ -27,6 +29,7 @@ export async function recalculateDueDates(transaction: Transaction) {
     transaction.type,
     transaction.contractDate,
     transaction.closingDate,
+    (await db.getTemplates()).checklists,
   );
   const [tasks, documents] = await Promise.all([
     db.listTasks(transaction.id),

@@ -127,6 +127,7 @@ export default function FollowUpsView() {
         agent,
         items,
         buildSignature(await db.getSettings()),
+        (await db.getTemplates()).emails,
       ),
     );
     setData((d) => d && { ...d, drafts: [...d.drafts, draft] });
