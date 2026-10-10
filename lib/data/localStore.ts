@@ -58,7 +58,21 @@ function forTransaction<T extends { transactionId: string }>(
   return transactionId ? list.filter((x) => x.transactionId === transactionId) : list;
 }
 
+const noFiles = () => new Error("Uploads need an account. In this browser-only demo there is nowhere safe to keep files.");
+
 export const localStore: DataStore = {
+  filesSupported: false,
+  listFiles: async () => [],
+  uploadFile: async () => {
+    throw noFiles();
+  },
+  deleteFile: async () => {
+    throw noFiles();
+  },
+  fileUrl: async () => {
+    throw noFiles();
+  },
+
   async listTransactions() {
     return load().transactions.map(withArchived);
   },

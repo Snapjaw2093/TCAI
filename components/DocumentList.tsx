@@ -1,11 +1,13 @@
 import { formatDate, isOverdue } from "@/lib/format";
-import type { DocumentItem } from "@/lib/types";
+import type { DocumentFile, DocumentItem } from "@/lib/types";
 
 export default function DocumentList({
   documents,
+  files = [],
   onChange,
 }: {
   documents: DocumentItem[];
+  files?: DocumentFile[];
   onChange: (document: DocumentItem) => void;
 }) {
   return (
@@ -18,6 +20,8 @@ export default function DocumentList({
               <p className="text-sm text-slate-900">{doc.name}</p>
               <p className="text-xs text-slate-500">
                 {doc.required ? "Required" : "Optional"}
+                {files.filter((f) => f.documentId === doc.id).length > 0 &&
+                  ` · ${files.filter((f) => f.documentId === doc.id).length} file${files.filter((f) => f.documentId === doc.id).length === 1 ? "" : "s"} attached`}
               </p>
             </div>
             <span className={`text-xs ${late ? "font-medium text-rose-600" : "text-slate-500"}`}>

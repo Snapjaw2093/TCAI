@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import ChecklistPanel from "@/components/ChecklistPanel";
 import DocumentList from "@/components/DocumentList";
 import EmailsPanel from "@/components/EmailsPanel";
+import FilesPanel from "@/components/FilesPanel";
 import { ErrorPanel, Loading } from "@/components/LoadState";
 import OnboardingSteps from "@/components/OnboardingSteps";
 import ProgressBar from "@/components/ProgressBar";
@@ -17,6 +18,7 @@ import { formatDate, formatPrice, isOverdue, relativeDays } from "@/lib/format";
 import { needsOnboarding, onboardingFor } from "@/lib/onboarding";
 import { useLoad } from "@/lib/useLoad";
 import type {
+  DocumentFile,
   DocumentItem,
   EmailDraft,
   Person,
@@ -30,6 +32,7 @@ type Loaded = {
   people: Person[];
   tasks: Task[];
   documents: DocumentItem[];
+  files: DocumentFile[];
   drafts: EmailDraft[];
   categories: string[];
 };
@@ -92,14 +95,15 @@ export default function TransactionDetail({ id }: { id: string }) {
     const wanted = tabFromHash();
     if (wanted) setTab(wanted);
     if (!transaction) return null;
-    const [people, tasks, documents, drafts, settings] = await Promise.all([
+    const [people, tasks, documents, files, drafts, settings] = await Promise.all([
       db.listPeople(),
       db.listTasks(id),
       db.listDocuments(id),
+      db.listFiles(id),
       db.listDrafts(id),
       db.getSettings(),
     ]);
-    return { transaction, people, tasks, documents, drafts, categories: settings.taskCategories };
+    return { transaction, people, tasks, documents, files, drafts, categories: settings.taskCategories };
   }, [id]);
   const { data, error, loading, reload, update } = useLoad(loader);
 
@@ -176,7 +180,7 @@ export default function TransactionDetail({ id }: { id: string }) {
     );
   }
 
-  const { transaction: t, people, tasks, documents, drafts, categories } = data;
+  const { transaction: t, people, tasks, documents, files, drafts, categories } = data;
   const client = people.find((p) => p.id === t.clientId);
   const agent = people.find((p) => p.id === t.agentId);
   const onboarding = onboardingFor(t, { people, tasks, documents, drafts });
@@ -314,8 +318,33 @@ export default function TransactionDetail({ id }: { id: string }) {
             {t.notes && <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">{t.notes}</p>}
           </Card>
         </div>
-      ) : tab === "Checklist" || tab === "Documents" ? (
-        tasks.length === 0 && documents.length === 0 ? (
+      ) : tab === "Documents" ? (
+        <>
+          {documents.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+              <p className="font-medium text-slate-900">No checklist yet</p>
+              <p className="mt-1 text-sm text-slate-500">Build tasks and required documents from the {t.type} template.</p>
+              <button
+                onClick={generateChecklist}
+                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Generate checklist
+              </button>
+            </div>
+          ) : (
+            <DocumentList documents={documents} files={files} onChange={updateDocument} />
+          )}
+          <FilesPanel
+            transactionId={t.id}
+            documents={documents}
+            files={files}
+            onUploaded={(file) => update((d) => ({ ...d, files: [file, ...d.files] }))}
+            onRemoved={(fileId) => update((d) => ({ ...d, files: d.files.filter((x) => x.id !== fileId) }))}
+            onDocumentReceived={(doc) => update((d) => ({ ...d, documents: d.documents.map((x) => (x.id === doc.id ? doc : x)) }))}
+          />
+        </>
+      ) : tab === "Checklist" ? (
+        tasks.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
             <p className="font-medium text-slate-900">No checklist yet</p>
             <p className="mt-1 text-sm text-slate-500">Build tasks and required documents from the {t.type} template.</p>
@@ -326,10 +355,8 @@ export default function TransactionDetail({ id }: { id: string }) {
               Generate checklist
             </button>
           </div>
-        ) : tab === "Checklist" ? (
-          <ChecklistPanel tasks={tasks} categories={categories} onChange={updateTask} />
         ) : (
-          <DocumentList documents={documents} onChange={updateDocument} />
+          <ChecklistPanel tasks={tasks} categories={categories} onChange={updateTask} />
         )
       ) : (
         <EmailsPanel
