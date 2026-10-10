@@ -55,7 +55,7 @@ export default function AuthForm() {
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={8}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               className={inputClass}
             />

@@ -7,6 +7,7 @@ import { useToast } from "@/components/ToastProvider";
 import { db, usingSupabase } from "@/lib/data";
 import { clearLocalDatabase, readLocalDatabase } from "@/lib/data/localStore";
 import { importDatabase } from "@/lib/data/supabaseStore";
+import { supabase } from "@/lib/supabase";
 import { buildSignature } from "@/lib/templates/emails";
 import { defaultTaskCategories, type Settings, type TransactionType } from "@/lib/types";
 import { useLoad } from "@/lib/useLoad";
@@ -85,6 +86,26 @@ export default function SettingsForm() {
       toast("Imported. Your deals are now saved in your account.");
     } catch (e) {
       toast(`Import failed: ${e instanceof Error ? e.message : "unknown error"}`, "error");
+    }
+  }
+
+  // Asks the server for a file of everything in this account. The server checks the login itself.
+  async function handleExport() {
+    try {
+      const { data } = (await supabase?.auth.getSession()) ?? { data: { session: null } };
+      const token = data.session?.access_token;
+      if (!token) throw new Error("Please log in again.");
+      const res = await fetch("/api/account/export", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "The download failed.");
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tc-assistant-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Your data was downloaded.");
+    } catch (e) {
+      toast(`Couldn't download: ${e instanceof Error ? e.message : "unknown error"}`, "error");
     }
   }
 
@@ -247,6 +268,19 @@ export default function SettingsForm() {
             className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
           >
             Import into my account
+          </button>
+        </section>
+      )}
+
+      {usingSupabase && (
+        <section className={card}>
+          <h2 className="font-medium text-slate-900">Download my data</h2>
+          <p className="text-sm text-slate-500">A file with every deal, contact, task, document and email draft in your account.</p>
+          <button
+            onClick={handleExport}
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Download my data
           </button>
         </section>
       )}
