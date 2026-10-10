@@ -30,7 +30,7 @@ function check<T>(result: { data: T; error: { message: string } | null }): T {
   return result.data;
 }
 
-type Row = Record<string, string | number | boolean | null>;
+type Row = Record<string, string | number | boolean | object | null>;
 
 const str = (v: unknown) => (v == null ? "" : String(v));
 const nullable = (v: unknown) => (v == null ? null : String(v));
@@ -122,10 +122,11 @@ const draftFromRow = (r: Row): EmailDraft => ({
   status: r.status as EmailDraft["status"],
   createdAt: str(r.created_at),
   sentAt: nullable(r.sent_at),
+  aiInfo: (r.ai_info as unknown as EmailDraft["aiInfo"]) ?? null,
 });
 const draftToRow = (d: Omit<EmailDraft, "id">) => ({
   transaction_id: d.transactionId,
-  recipient_id: d.recipientId,
+  recipient_id: d.recipientId || null, // empty = someone who isn't in the deal
   recipient_email: d.recipientEmail,
   kind: d.kind,
   subject: d.subject,
@@ -133,6 +134,7 @@ const draftToRow = (d: Omit<EmailDraft, "id">) => ({
   status: d.status,
   created_at: d.createdAt,
   sent_at: d.sentAt,
+  ai_info: d.aiInfo ?? null,
 });
 
 // Reads every row of a table (optionally only one deal's rows).
@@ -297,6 +299,7 @@ export const supabaseStore: DataStore = {
       ["transactions", "archived"],
       ["tasks", "category"],
       ["email_drafts", "recipient_email"],
+      ["email_drafts", "ai_info"],
       ["settings", "default_transaction_type"],
       ["settings", "follow_up_days"],
       ["settings", "task_categories"],

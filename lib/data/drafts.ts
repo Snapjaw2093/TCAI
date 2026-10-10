@@ -6,6 +6,7 @@ import {
   buildWelcomeEmail,
   type DraftContent,
 } from "@/lib/templates/emails";
+import type { AiDraftResult, AiInfo } from "@/lib/ai/types";
 import type { EmailDraft, Person, Task } from "@/lib/types";
 
 export type DraftPurpose = "welcome" | "follow-up";
@@ -92,6 +93,9 @@ export async function createWelcomeDrafts(
 // Rewrites an existing draft from the current templates and deal details.
 // The address you typed in "To" is kept; the draft goes back to "draft" status.
 export async function regenerateDraft(draft: EmailDraft): Promise<EmailDraft> {
+  if (draft.kind === "ai") {
+    throw new Error("AI drafts can't be regenerated here. Create a new one with Draft with AI.");
+  }
   const content = await generateContent(draft.transactionId, draft.recipientId, draft.kind);
   return db.saveDraft({ ...draft, ...content, status: "draft", sentAt: null });
 }
@@ -138,3 +142,29 @@ export function makeDraftActions(apply: {
     },
   };
 }
+
+// Saves what the AI wrote as a new draft (status "draft", nothing sent), together
+// with the information it was written from. Only creates an email draft: it
+// never changes the transaction or anything else you have recorded.
+export function createAiDraft(
+  transactionId: string,
+  recipient: Person | null,
+  recipientEmail: string,
+  content: { subject: string; body: string },
+  info: AiInfo,
+): Promise<EmailDraft> {
+  return db.saveDraft({
+    transactionId,
+    recipientId: recipient?.id ?? "",
+    recipientEmail,
+    kind: "ai",
+    subject: content.subject,
+    body: content.body,
+    status: "draft",
+    createdAt: new Date().toISOString(),
+    sentAt: null,
+    aiInfo: info,
+  });
+}
+
+export type { AiDraftResult };

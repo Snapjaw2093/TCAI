@@ -1,3 +1,5 @@
+import type { AiInfo } from "@/lib/ai/types";
+
 // The shape of every record in the app. Think of each type as a form:
 // it lists the boxes a record has and what can go in them.
 // Dates are plain "YYYY-MM-DD" text so they save cleanly anywhere.
@@ -53,16 +55,21 @@ export type DocumentItem = {
 export type EmailDraft = {
   id: string;
   transactionId: string;
+  // The saved person it was written for. Empty when it is for someone who isn't
+  // in the deal (a lender, a title officer...).
   recipientId: string;
   // The address the draft is "to". Starts as the person's email but can be
   // edited, so it is stored on the draft itself.
   recipientEmail: string;
-  kind: "welcome" | "follow-up";
+  // "ai" drafts were written by the AI; the others fill in your templates.
+  kind: "welcome" | "follow-up" | "ai";
   subject: string;
   body: string;
   status: "draft" | "approved" | "sent";
   createdAt: string;
   sentAt: string | null;
+  // For AI drafts: what the AI was told, so you can check the draft against it.
+  aiInfo?: AiInfo | null;
 };
 
 export const defaultTaskCategories = [

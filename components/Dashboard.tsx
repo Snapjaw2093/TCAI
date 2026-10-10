@@ -136,6 +136,9 @@ export default function Dashboard() {
         <Link href="/follow-ups#compose" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
           Draft an email
         </Link>
+        <Link href="/follow-ups#ai" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          Draft with AI
+        </Link>
         <Link href="/follow-ups" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
           Review follow-ups
         </Link>
@@ -236,7 +239,7 @@ export default function Dashboard() {
                   <Link href="/follow-ups#drafts" className={rowClass}>
                     <div className="min-w-0">
                       <p className="truncate text-sm text-slate-900">{d.subject}</p>
-                      <p className="truncate text-xs text-slate-500">To {nameOf(d.recipientId)}</p>
+                      <p className="truncate text-xs text-slate-500">To {nameOf(d.recipientId) || d.recipientEmail || "someone"}</p>
                     </div>
                     <span className="shrink-0 text-xs text-slate-500">{d.status === "approved" ? "Approved · not sent" : "Draft · not sent"}</span>
                   </Link>
