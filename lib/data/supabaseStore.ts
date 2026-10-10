@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { DataStore } from "@/lib/data/store";
 import { makeSampleData } from "@/lib/data/seed";
+import { requiredSchemaVersion } from "@/lib/schemaUpdateSql";
 import { withDefaults } from "@/lib/templates";
 import type { Db } from "@/lib/data/localStore";
 import {
@@ -319,6 +320,14 @@ export const supabaseStore: DataStore = {
         throw new Error(r.error.message || "Could not reach the database.");
       }
     });
+    // The version marker says whether the security migrations have been run.
+    const v = await c.from("app_schema_version").select("version").order("version", { ascending: false }).limit(1);
+    if (v.error) {
+      if (/does not exist|could not find|schema cache/i.test(v.error.message)) missing.push("security update");
+      else throw new Error(v.error.message || "Could not reach the database.");
+    } else if (Number(v.data?.[0]?.version ?? 0) < requiredSchemaVersion) {
+      missing.push("security update");
+    }
     return missing;
   },
 

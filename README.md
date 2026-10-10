@@ -42,15 +42,17 @@ The app saves data one of two ways, chosen automatically by `lib/data/index.ts`:
 ### Setting up Supabase
 
 1. Create a project at supabase.com.
-2. In the project, open **SQL Editor > New query**, paste the contents of `supabase/schema.sql`, and run it. This creates the tables and the locks that keep each account's data private. It is safe to run again.
+2. In the project, open **SQL Editor > New query**, paste the contents of `supabase/schema.sql`, and run it. This creates the tables, the locks that keep each account's data private, and the checks that refuse bad input. It is safe to run again.
 3. Copy `.env.example` to `.env.local` and fill in the **Project URL** and **publishable key** (Project Settings > API Keys). On Vercel, add the same two variables under **Settings > Environment Variables** and redeploy.
 4. In Supabase **Authentication > Sign In / Providers**, decide whether new accounts must confirm their email. Under **Authentication > URL Configuration**, set the Site URL to your deployed address.
 
-Never put the `service_role` / secret key or the database password in this app or in Git.
+Never put the `service_role` / secret key or the database password in this app or in Git. The app never uses them.
 
-Deals made before you had an account can be copied in from **Settings > Import into my account**.
+**Use two Supabase projects: one for testing (made-up data only) and one for real clients,** with their keys in separate Vercel environments. The full guide, covering the schema, the access model, Auth settings, migrations and the access-control tests, is in [`supabase/README.md`](supabase/README.md).
 
-When `supabase/schema.sql` changes, run the new version in the SQL Editor again. It is safe to repeat. If your database is behind, the app shows a "Your database needs a quick update" screen with the exact SQL and a Copy button, instead of failing in confusing ways.
+Deals made before you had an account can be copied in from **Settings > Import into my account**. Don't import real client records while developing. **Settings > Download my data** gives you a file of everything in your account.
+
+When `supabase/schema.sql` changes (it is generated from `supabase/migrations/`, see `npm run build:sql`), run the new version in the SQL Editor again. It is safe to repeat. If your database is behind, the app shows a "Your database needs a quick update" screen with the exact SQL and a Copy button, instead of failing in confusing ways.
 
 "Reset to sample data" on a real account deletes all of its deals, so it asks you to type DELETE first. Use it only on a test account.
 
