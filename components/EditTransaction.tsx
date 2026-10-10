@@ -36,5 +36,6 @@ export default function EditTransaction({ id }: { id: string }) {
       </div>
     );
   }
-  return <TransactionForm editing={target} />;
+  // The key remounts the form with fresh values whenever the saved deal changes.
+  return <TransactionForm key={JSON.stringify(target)} editing={target} />;
 }

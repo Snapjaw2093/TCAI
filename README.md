@@ -30,4 +30,18 @@ Open http://localhost:3000. The app starts with two sample deals. You can reset 
 
 ## Where your data lives
 
-For now, everything is saved in your browser (local storage), so it stays on the computer and browser you used and there is no login. All pages go through `lib/data/index.ts`, so moving to Supabase later means changing that one file.
+The app saves data one of two ways, chosen automatically by `lib/data/index.ts`:
+
+- **Supabase (cloud, with login):** used when the two settings below are present. Each person logs in and only ever sees their own deals.
+- **Browser storage:** used when they are missing. No login, and data stays in that one browser.
+
+### Setting up Supabase
+
+1. Create a project at supabase.com.
+2. In the project, open **SQL Editor > New query**, paste the contents of `supabase/schema.sql`, and run it. This creates the tables and the locks that keep each account's data private. It is safe to run again.
+3. Copy `.env.example` to `.env.local` and fill in the **Project URL** and **publishable key** (Project Settings > API Keys). On Vercel, add the same two variables under **Settings > Environment Variables** and redeploy.
+4. In Supabase **Authentication > Sign In / Providers**, decide whether new accounts must confirm their email. Under **Authentication > URL Configuration**, set the Site URL to your deployed address.
+
+Never put the `service_role` / secret key or the database password in this app or in Git.
+
+Deals made before you had an account can be copied in from **Settings > Import into my account**.

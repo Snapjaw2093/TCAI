@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { db } from "@/lib/data";
+import { db, usingSupabase } from "@/lib/data";
+import { clearLocalDatabase, readLocalDatabase } from "@/lib/data/localStore";
+import { importDatabase } from "@/lib/data/supabaseStore";
 import { buildSignature } from "@/lib/templates/emails";
 import type { Settings } from "@/lib/types";
 
@@ -13,10 +15,14 @@ export default function SettingsForm() {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [saved, setSaved] = useState(false);
+  // How many deals are saved in this browser (only checked when using Supabase).
+  const [browserDeals, setBrowserDeals] = useState(0);
+  const [importMessage, setImportMessage] = useState("");
 
   useEffect(() => {
     async function load() {
       setSettings(await db.getSettings());
+      if (usingSupabase) setBrowserDeals(readLocalDatabase()?.transactions.length ?? 0);
     }
     load();
   }, []);
@@ -32,6 +38,25 @@ export default function SettingsForm() {
     e.preventDefault();
     await db.saveSettings(settings!);
     setSaved(true);
+  }
+
+  async function handleImport() {
+    const local = readLocalDatabase();
+    if (!local) return;
+    if (
+      !window.confirm(
+        `Copy ${local.transactions.length} deal(s) from this browser into your account? They will be removed from this browser afterwards.`,
+      )
+    )
+      return;
+    try {
+      await importDatabase(local);
+      clearLocalDatabase();
+      setBrowserDeals(0);
+      setImportMessage("Imported. Your deals are now saved in your account.");
+    } catch (e) {
+      setImportMessage(e instanceof Error ? `Import failed: ${e.message}` : "Import failed.");
+    }
   }
 
   async function handleReset() {
@@ -101,6 +126,29 @@ export default function SettingsForm() {
           Drafts you&apos;ve already created keep their old signature.
         </p>
       </form>
+
+      {usingSupabase && (browserDeals > 0 || importMessage) && (
+        <section className="rounded-xl border border-slate-200 bg-white p-6">
+          <h2 className="font-medium text-slate-900">Data saved in this browser</h2>
+          {browserDeals > 0 && (
+            <>
+              <p className="mt-1 text-sm text-slate-500">
+                {browserDeals} deal{browserDeals === 1 ? "" : "s"} from before you had an account
+                {browserDeals === 1 ? " is" : " are"} still saved in this browser. Copy
+                {browserDeals === 1 ? " it" : " them"} into your account to keep
+                {browserDeals === 1 ? " it" : " them"}. This may include the sample deals.
+              </p>
+              <button
+                onClick={handleImport}
+                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Import into my account
+              </button>
+            </>
+          )}
+          {importMessage && <p className="mt-3 text-sm text-slate-700">{importMessage}</p>}
+        </section>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-6">
         <h2 className="font-medium text-slate-900">Sample data</h2>

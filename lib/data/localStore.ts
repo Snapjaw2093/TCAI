@@ -8,7 +8,7 @@ import { defaultSettings, type EmailDraft } from "@/lib/types";
 
 const KEY = "tc-assistant-db-v1";
 
-type Db = Omit<Database, "drafts"> & { drafts: EmailDraft[] };
+export type Db = Omit<Database, "drafts"> & { drafts: EmailDraft[] };
 
 function load(): Db {
   const raw = window.localStorage.getItem(KEY);
@@ -127,3 +127,18 @@ export const localStore: DataStore = {
     persist({ ...makeSampleData(), settings } as Db);
   },
 };
+
+// Saved browser data, or null if there is none. Used to move it to Supabase.
+export function readLocalDatabase(): Db | null {
+  const raw = window.localStorage.getItem(KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Db;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLocalDatabase() {
+  window.localStorage.removeItem(KEY);
+}
