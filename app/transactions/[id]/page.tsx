@@ -1,11 +1,17 @@
-import EmptyState from "@/components/EmptyState";
-import PageHeader from "@/components/PageHeader";
+import { Suspense } from "react";
+import TransactionDetail from "@/components/TransactionDetail";
 
-export default function Page() {
+// Reading the URL's [id] has to happen inside <Suspense> so the rest of
+// the page can show instantly while it resolves.
+async function Detail({ params }: { params: PageProps<"/transactions/[id]">["params"] }) {
+  const { id } = await params;
+  return <TransactionDetail id={id} />;
+}
+
+export default function Page(props: PageProps<"/transactions/[id]">) {
   return (
-    <>
-      <PageHeader title="Transaction" description="Overview, checklist, documents, and emails." />
-      <EmptyState title="Detail page coming in Stage 3" description="Each deal will have its own page with tabs." />
-    </>
+    <Suspense fallback={<p className="text-sm text-slate-500">Loading…</p>}>
+      <Detail params={props.params} />
+    </Suspense>
   );
 }
