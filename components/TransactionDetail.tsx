@@ -189,11 +189,17 @@ export default function TransactionDetail({ id }: { id: string }) {
         <span className="text-sm text-slate-500">
           {t.type === "buyer" ? "Buyer side" : "Seller side"}
         </span>
+        <Link
+          href={`/transactions/${t.id}/edit`}
+          className="ml-auto rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Edit
+        </Link>
         <select
           value={t.status}
           onChange={(e) => updateStatus(e.target.value as TransactionStatus)}
           aria-label="Change status"
-          className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm"
+          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm"
         >
           <option value="active">Active</option>
           <option value="pending">Pending</option>
