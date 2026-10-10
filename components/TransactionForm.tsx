@@ -70,7 +70,10 @@ export default function TransactionForm({ editing }: { editing?: EditTarget }) {
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    const form = new FormData(e.currentTarget);
+    // Next.js keeps visited pages alive in the background, so after saving we
+    // clear this form ourselves or it would reopen filled in with the old deal.
+    const formElement = e.currentTarget;
+    const form = new FormData(formElement);
     const get = (key: string) => String(form.get(key) ?? "").trim();
 
     const required = ["propertyAddress", "clientName", "clientEmail", "agentName", "agentEmail"];
@@ -101,6 +104,7 @@ export default function TransactionForm({ editing }: { editing?: EditTarget }) {
       // New contract or closing dates move the checklist deadlines with them.
       await recalculateDueDates(transaction);
       router.push(`/transactions/${transaction.id}#overview`);
+      setSaving(false);
       return;
     }
 
@@ -116,6 +120,9 @@ export default function TransactionForm({ editing }: { editing?: EditTarget }) {
     });
     await applyTemplate(transaction);
     router.push(`/transactions/${transaction.id}`);
+    formElement.reset();
+    setType("buyer");
+    setSaving(false);
   }
 
   return (

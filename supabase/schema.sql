@@ -1,0 +1,94 @@
+-- TC Assistant database setup.
+-- Paste this whole file into Supabase: SQL Editor > New query > Run.
+-- It is safe to run more than once.
+--
+-- Every table has a user_id column and a lock (row level security) so each
+-- login can only ever see and change its own rows.
+
+create table if not exists public.people (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  name       text not null,
+  email      text not null,
+  phone      text not null default '',
+  role       text not null check (role in ('client', 'agent')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.transactions (
+  id               uuid primary key default gen_random_uuid(),
+  user_id          uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  type             text not null check (type in ('buyer', 'seller')),
+  status           text not null default 'active'
+                   check (status in ('active', 'pending', 'closed', 'cancelled')),
+  property_address text not null,
+  client_id        uuid not null references public.people (id),
+  agent_id         uuid not null references public.people (id),
+  contract_date    date,
+  closing_date     date,
+  price            numeric,
+  notes            text not null default '',
+  created_at       date not null default current_date
+);
+
+create table if not exists public.tasks (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  transaction_id uuid not null references public.transactions (id) on delete cascade,
+  title          text not null,
+  due_date       date,
+  status         text not null default 'open' check (status in ('open', 'done', 'skipped')),
+  key            text
+);
+
+create table if not exists public.documents (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  transaction_id uuid not null references public.transactions (id) on delete cascade,
+  name           text not null,
+  required       boolean not null default true,
+  status         text not null default 'needed' check (status in ('needed', 'requested', 'received')),
+  due_date       date
+);
+
+create table if not exists public.email_drafts (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  transaction_id uuid not null references public.transactions (id) on delete cascade,
+  recipient_id   uuid not null references public.people (id),
+  kind           text not null check (kind in ('welcome', 'follow-up')),
+  subject        text not null,
+  body           text not null,
+  status         text not null default 'draft' check (status in ('draft', 'approved', 'sent')),
+  created_at     timestamptz not null default now(),
+  sent_at        timestamptz
+);
+
+create table if not exists public.settings (
+  user_id uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  name    text not null default '',
+  title   text not null default 'Transaction Coordinator',
+  company text not null default ''
+);
+
+-- Indexes: make "all tasks for this deal" style lookups fast.
+create index if not exists transactions_user_idx on public.transactions (user_id);
+create index if not exists people_user_idx       on public.people (user_id);
+create index if not exists tasks_transaction_idx on public.tasks (transaction_id);
+create index if not exists documents_transaction_idx on public.documents (transaction_id);
+create index if not exists drafts_transaction_idx on public.email_drafts (transaction_id);
+
+-- The locks: signed-in users can only touch rows where user_id is their own.
+do $$
+declare t text;
+begin
+  foreach t in array array['people', 'transactions', 'tasks', 'documents', 'email_drafts', 'settings']
+  loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "own rows" on public.%I', t);
+    execute format(
+      'create policy "own rows" on public.%I for all to authenticated
+         using (user_id = (select auth.uid()))
+         with check (user_id = (select auth.uid()))', t);
+  end loop;
+end $$;

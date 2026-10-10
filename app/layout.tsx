@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
-import Sidebar from "@/components/Sidebar";
+import AuthGate from "@/components/AuthGate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,13 +24,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full md:flex">
-        <Suspense fallback={<div className="md:w-60" />}>
-          <Sidebar />
-        </Suspense>
-        <main className="flex-1 p-6 md:p-10">
-          <div className="mx-auto max-w-5xl">{children}</div>
-        </main>
+      <body className="min-h-full">
+        <AuthGate>{children}</AuthGate>
       </body>
     </html>
   );
