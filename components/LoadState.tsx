@@ -3,8 +3,8 @@
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
     <div role="status" aria-label={label} className="space-y-3">
-      <div className="h-24 animate-pulse rounded-xl bg-slate-200/70" />
-      <div className="h-24 animate-pulse rounded-xl bg-slate-200/70" />
+      <div className="skeleton h-24 rounded-xl" />
+      <div className="skeleton h-24 rounded-xl" />
       <p className="text-sm text-slate-500">{label}</p>
     </div>
   );
