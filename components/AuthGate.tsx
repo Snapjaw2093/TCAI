@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { Suspense, useEffect, useState } from "react";
 import AuthForm from "@/components/AuthForm";
 import Sidebar from "@/components/Sidebar";
+import TopBar from "@/components/TopBar";
 import { db, usingSupabase } from "@/lib/data";
 import { schemaUpdateSql } from "@/lib/schemaUpdateSql";
 import { supabase } from "@/lib/supabase";
@@ -22,9 +23,14 @@ function Shell({ email, children }: { email?: string; children: React.ReactNode 
           onSignOut={email ? () => supabase?.auth.signOut() : undefined}
         />
       </Suspense>
-      <main className="flex-1 p-6 md:p-10">
-        <div className="mx-auto max-w-5xl">{children}</div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <Suspense fallback={<div className="h-16 md:h-20" />}>
+          <TopBar email={email} />
+        </Suspense>
+        <main className="flex-1 p-6 md:p-10">
+          <div className="mx-auto max-w-5xl">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
