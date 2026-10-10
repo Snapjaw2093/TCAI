@@ -21,6 +21,8 @@ Five pages, sharing one set of deals, tasks, documents and drafts:
 - **Email & Follow-ups:** what's overdue or coming up, a composer (pick a deal, a recipient, and what the email is about), and separate Drafts and Sent tabs. Every draft has an editable recipient, subject and message, plus copy, regenerate, save, approve, and mark-as-sent.
 - **Settings:** your signature, defaults (transaction side, follow-up window), task categories, and a Templates tab for the checklists and the five email templates.
 
+**Files:** on a deal's Documents tab you can attach contracts, disclosures and receipts (private to your account, up to 10 MB each; see [`supabase/README.md`](supabase/README.md#file-uploads)). Uploads need a Supabase account; the browser-only demo can't keep files.
+
 **Honest about what it doesn't do:** TC Assistant never sends email. "Generate" fills in your templates with the deal's details; that button is not AI. The separate **Draft with AI** button writes a first draft with a language model (see [AI drafting](#ai-drafting)). A draft is only ever "marked as sent" because you sent it from your own email app and told the app. Nothing talks to Gmail or any other service.
 
 ## Project layout

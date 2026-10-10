@@ -17,6 +17,7 @@ Think of the database as an apartment building. Each account gets its own apartm
 | `email_drafts` | Drafts, approved and sent emails, including AI-assisted drafts (`kind = 'ai'`, with their source info in `ai_info`) | `transactions`, `people` (optional) |
 | `settings` | One row per account: signature, defaults | none |
 | `templates` | One row per account: edited checklists and email wording | none |
+| `document_files` | One row per uploaded file: name, type, size, where it is stored, and optionally which checklist document it satisfies | `transactions`, `documents` (optional) |
 | `app_schema_version` | Read-only marker the app uses to notice when the database is behind | none |
 
 Every table except `app_schema_version` has `user_id uuid not null default auth.uid() references auth.users on delete cascade`. Closing an account deletes all of its data.
@@ -49,6 +50,20 @@ There are no organizations or shared teams: one account is one private workspace
 1. **In the database (the real wall).** RLS policies on every table, privileges revoked from `anon`, same-account foreign keys, and input limits (`CHECK` constraints). These apply to every request, whatever sent it: the app, a modified browser, `curl`, or a bug in this app.
 2. **In server routes** (`/api/ai/draft`, `/api/account/export`): they verify the login token on the server, never trust anything the browser claims about who it is, and refuse before doing any work. Hiding a button is never relied on; the buttons are convenience only.
 3. **In the app's forms** (`lib/data/validate.ts`): friendly messages for bad input. This is a courtesy; the database repeats the checks.
+
+## File uploads
+
+Files are kept in a **private** Supabase Storage bucket, `deal-documents`. Nothing is public and nothing is served by a permanent link.
+
+- **Paths:** `<your user id>/<deal id>/<random>-<file name>`. The storage locks check the first folder against your login, and for uploads also that the second folder is a deal you own, so you can't add a file to someone else's deal or folder.
+- **No editing:** there is no update lock on purpose. A stored file is only ever added or removed.
+- **Limits (enforced three times: in the app, the bucket, and the database):** 10 MB per file; PDF, PNG, JPG, WebP, HEIC, Word (.docx), Excel (.xlsx), plain text and CSV. Programs, web pages and SVG are refused.
+- **Downloads:** the app asks storage for a link that expires after 60 seconds and forces a download, so a file can never open and run as a web page.
+- **Clean-up:** removing a file deletes the stored file first and then its record. Deleting a checklist item keeps its files on the deal. **Reset to sample data** removes every stored file. Deleting an *account* in Supabase's dashboard removes its records but **not** its stored files: empty `deal-documents/<user id>/` in Storage → Files first.
+- **Not covered:** there is no virus scan. Treat downloaded files from clients like any email attachment. The AI never sees file contents. The "Download my data" export lists files (name, type, size) but does not include their contents.
+- **Demo mode:** uploads need an account; the browser-only demo has nowhere safe to keep files and says so.
+
+Check that the bucket exists (Storage → Buckets: `deal-documents`, marked **Private**) after running the setup SQL.
 
 ## Setup
 
@@ -96,6 +111,7 @@ Migrations are numbered, idempotent SQL files in [`migrations/`](migrations/):
 | --- | --- |
 | `0001_initial.sql` | Tables, per-account RLS policies, and the later additive columns (archive, categories, AI drafts) |
 | `0002_security_hardening.sql` | Removes all anonymous access, same-account foreign keys, input limits, version marker |
+| `0003_document_files.sql` | File uploads: the private `deal-documents` storage bucket, the `document_files` table, and the locks on stored files |
 
 To add one: create `migrations/0003_what_it_does.sql` (write it so running it twice is harmless), bump the version marker at its end (`insert into app_schema_version ... on conflict do nothing`), then run:
 
@@ -122,4 +138,4 @@ The script **wipes** the database it connects to, so it refuses any URL that loo
 
 ### What has and has not been tested
 
-Tested: the SQL access tests above; the same attacks sent over HTTP through a real PostgREST (the layer Supabase uses) with real signed tokens; the app's flows against that hardened database; the upgrade path from the original schema. **Not** tested: a real Supabase project, Supabase's hosted Auth (email confirmation, password policy, rate limits), or load. Before storing real client records, repeat the access checks against your own `tcai-prod` project with two real test accounts, and review the settings in step 3.
+Tested: the SQL access tests above (including the storage locks on stored files, with a stand-in for Supabase Storage's database tables); the same attacks sent over HTTP through a real PostgREST (the layer Supabase uses) with real signed tokens; the app's flows against that hardened database; the upgrade path from the original schema. **Not** tested: Supabase's real Storage service (uploads and signed links were tested against a stand-in; only the database-side locks are exercised for real), a real Supabase project, Supabase's hosted Auth (email confirmation, password policy, rate limits), or load. Before storing real client records, repeat the access checks against your own `tcai-prod` project with two real test accounts, and review the settings in step 3.

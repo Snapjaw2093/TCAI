@@ -1,11 +1,13 @@
 import { supabase } from "@/lib/supabase";
 import type { DataStore } from "@/lib/data/store";
 import { makeSampleData } from "@/lib/data/seed";
+import { buildPath, FILES_BUCKET, validateUpload } from "@/lib/data/files";
 import { requiredSchemaVersion } from "@/lib/schemaUpdateSql";
 import { withDefaults } from "@/lib/templates";
 import type { Db } from "@/lib/data/localStore";
 import {
   defaultSettings,
+  type DocumentFile,
   type DocumentItem,
   type EmailDraft,
   type Person,
@@ -112,6 +114,16 @@ const documentToRow = (d: Omit<DocumentItem, "id">) => ({
   due_date: d.dueDate,
 });
 
+const fileFromRow = (r: Row): DocumentFile => ({
+  id: str(r.id),
+  transactionId: str(r.transaction_id),
+  documentId: nullable(r.document_id),
+  fileName: str(r.file_name),
+  mimeType: str(r.mime_type),
+  sizeBytes: Number(r.size_bytes),
+  createdAt: str(r.created_at),
+});
+
 const draftFromRow = (r: Row): EmailDraft => ({
   id: str(r.id),
   transactionId: str(r.transaction_id),
@@ -208,6 +220,65 @@ export async function importDatabase(source: Db) {
 }
 
 export const supabaseStore: DataStore = {
+  filesSupported: true,
+
+  async listFiles(transactionId) {
+    let q = client().from("document_files").select("*").order("created_at", { ascending: false });
+    if (transactionId) q = q.eq("transaction_id", transactionId);
+    return (check(await q) as Row[]).map(fileFromRow);
+  },
+
+  // Stores the file, then records it. If recording fails the file is removed again,
+  // so nothing is left behind that the app can't see.
+  async uploadFile(transactionId, documentId, file) {
+    const c = client();
+    const checked = validateUpload(file);
+    const { data: auth } = await c.auth.getUser();
+    if (!auth.user) throw new Error("Please log in again.");
+    const path = buildPath(auth.user.id, transactionId, file.name);
+
+    const up = await c.storage.from(FILES_BUCKET).upload(path, file, { contentType: checked.type, upsert: false });
+    if (up.error) throw new Error(up.error.message || "The upload failed.");
+
+    const row = await c
+      .from("document_files")
+      .insert({
+        transaction_id: transactionId,
+        document_id: documentId,
+        file_name: checked.name,
+        mime_type: checked.type,
+        size_bytes: file.size,
+        storage_path: path,
+      })
+      .select()
+      .single();
+    if (row.error) {
+      await c.storage.from(FILES_BUCKET).remove([path]);
+      throw new Error(row.error.message || "The file was uploaded but couldn't be saved.");
+    }
+    return fileFromRow(row.data as Row);
+  },
+
+  // Removes the stored file first. Only if that works is the record deleted.
+  async deleteFile(id) {
+    const c = client();
+    const found = check(await c.from("document_files").select("storage_path").eq("id", id).maybeSingle()) as Row | null;
+    if (!found) return;
+    const gone = await c.storage.from(FILES_BUCKET).remove([str(found.storage_path)]);
+    if (gone.error) throw new Error(gone.error.message || "The file couldn't be removed.");
+    check(await c.from("document_files").delete().eq("id", id));
+  },
+
+  // A link that expires after a minute and forces a download, so a file can never open as a web page.
+  async fileUrl(id) {
+    const c = client();
+    const found = check(await c.from("document_files").select("storage_path, file_name").eq("id", id).maybeSingle()) as Row | null;
+    if (!found) throw new Error("That file no longer exists.");
+    const signed = await c.storage.from(FILES_BUCKET).createSignedUrl(str(found.storage_path), 60, { download: str(found.file_name) });
+    if (signed.error || !signed.data) throw new Error(signed.error?.message || "Couldn't open the file.");
+    return signed.data.signedUrl;
+  },
+
   listTransactions: () => list("transactions", transactionFromRow, "created_at"),
   async getTransaction(id) {
     const data = check(await client().from("transactions").select("*").eq("id", id).maybeSingle());
@@ -305,6 +376,7 @@ export const supabaseStore: DataStore = {
       ["settings", "follow_up_days"],
       ["settings", "task_categories"],
       ["templates", "user_id"],
+      ["document_files", "storage_path"],
     ];
     const c = client();
     const results = await Promise.all(
@@ -336,6 +408,12 @@ export const supabaseStore: DataStore = {
   // and drafts), then the people they pointed at.
   async resetToSampleData() {
     const c = client();
+    // Stored files are not removed by deleting their deal, so take them out first.
+    const files = check(await c.from("document_files").select("storage_path")) as Row[];
+    for (let i = 0; i < files.length; i += 100) {
+      const gone = await c.storage.from(FILES_BUCKET).remove(files.slice(i, i + 100).map((f) => str(f.storage_path)));
+      if (gone.error) throw new Error(gone.error.message || "Couldn't remove the stored files.");
+    }
     check(await c.from("transactions").delete().not("id", "is", null));
     check(await c.from("people").delete().not("id", "is", null));
     await importDatabase(makeSampleData() as Db);

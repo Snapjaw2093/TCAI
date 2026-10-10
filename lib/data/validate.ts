@@ -1,3 +1,4 @@
+import { validateUpload } from "@/lib/data/files";
 import type { DataStore } from "@/lib/data/store";
 import type { DocumentItem, EmailDraft, Person, Settings, Task, Transaction } from "@/lib/types";
 
@@ -121,5 +122,9 @@ export function withValidation(store: DataStore): DataStore {
     saveDocument: async (d) => store.saveDocument(validateDocument(d)),
     saveDraft: async (d) => store.saveDraft(validateDraft(d)),
     saveSettings: async (s) => store.saveSettings(validateSettings(s)),
+    uploadFile: async (transactionId, documentId, file) => {
+      validateUpload(file);
+      return store.uploadFile(transactionId, documentId, file);
+    },
   };
 }

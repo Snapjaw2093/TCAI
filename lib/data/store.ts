@@ -1,4 +1,5 @@
 import type {
+  DocumentFile,
   DocumentItem,
   EmailDraft,
   Person,
@@ -28,6 +29,15 @@ export interface DataStore {
 
   listDocuments(transactionId?: string): Promise<DocumentItem[]>;
   saveDocument(d: DocumentItem | NewRecord<DocumentItem>): Promise<DocumentItem>;
+
+  // Uploaded files. Only accounts (the cloud version) can store files: the
+  // browser-only demo has no room for them, and says so.
+  filesSupported: boolean;
+  listFiles(transactionId?: string): Promise<DocumentFile[]>;
+  uploadFile(transactionId: string, documentId: string | null, file: File): Promise<DocumentFile>;
+  deleteFile(id: string): Promise<void>;
+  // A link that works for one minute and downloads the file.
+  fileUrl(id: string): Promise<string>;
 
   listDrafts(transactionId?: string): Promise<EmailDraft[]>;
   saveDraft(d: EmailDraft | NewRecord<EmailDraft>): Promise<EmailDraft>;

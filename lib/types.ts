@@ -52,6 +52,17 @@ export type DocumentItem = {
   dueDate: string | null;
 };
 
+// A file uploaded to a deal, optionally tied to one of its checklist documents.
+export type DocumentFile = {
+  id: string;
+  transactionId: string;
+  documentId: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+};
+
 export type EmailDraft = {
   id: string;
   transactionId: string;

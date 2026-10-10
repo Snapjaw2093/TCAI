@@ -4,8 +4,9 @@ import { requireUser } from "@/lib/server/auth";
 // "Download my data": everything the logged-in person has, as one JSON file.
 // A protected operation: it needs a valid login, and it reads through that
 // person's own database permissions, so it can never include anyone else's rows.
+// Uploaded files are listed (name, type, size) but their contents are not included.
 
-const TABLES = ["people", "transactions", "tasks", "documents", "email_drafts", "settings", "templates"] as const;
+const TABLES = ["people", "transactions", "tasks", "documents", "email_drafts", "document_files", "settings", "templates"] as const;
 
 const hits = new Map<string, number[]>();
 const MAX_PER_MINUTE = 10;

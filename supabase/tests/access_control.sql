@@ -233,6 +233,98 @@ begin
   perform tests.check('an oversized templates blob is refused', msg is not null, coalesce(msg, 'it was allowed'));
 end $$;
 
+-- ---- 6b. uploaded files: private to their owner, tied to their own deals ----
+do $$
+declare
+  alice constant uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  bob   constant uuid := 'bbbbbbbb-0000-0000-0000-000000000002';
+  a_tx uuid; b_tx uuid; a_doc uuid; b_pa uuid; b_pc uuid; tmp_tx uuid; file_id uuid; msg text; n bigint;
+  a_path text; b_path text;
+  ins constant text := 'insert into storage.objects (bucket_id, name) values (''deal-documents'', %L)';
+  rec constant text := 'insert into document_files (transaction_id, file_name, mime_type, size_bytes, storage_path) values (%L, %L, %L, %s, %L)';
+begin
+  select id into a_tx from transactions where user_id = alice;
+  select id into b_tx from transactions where user_id = bob;
+  select id into a_doc from documents where user_id = alice limit 1;
+  a_path := alice || '/' || a_tx || '/abc-contract.pdf';
+  b_path := bob || '/' || b_tx || '/def-receipt.pdf';
+
+  perform tests.check('the deal-documents bucket exists, is private, and has a size limit',
+    exists (select 1 from storage.buckets where id = 'deal-documents' and public = false and file_size_limit = 10485760));
+
+  -- storing a file
+  perform tests.check('Alice can store a file under her own folder, for her own deal', tests.touched(alice, format(ins, a_path)) = 1);
+  perform tests.check('Bob can store a file under his own folder, for his own deal', tests.touched(bob, format(ins, b_path)) = 1);
+  msg := tests.refused(bob, format(ins, alice || '/' || a_tx || '/planted.pdf'));
+  perform tests.check('Bob cannot store a file in Alice''s folder', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(ins, bob || '/' || a_tx || '/planted.pdf'));
+  perform tests.check('Bob cannot store a file against a deal that is not his, even in his own folder', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(ins, bob || '/' || gen_random_uuid() || '/ghost.pdf'));
+  perform tests.check('nor against a deal that does not exist', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(ins, 'loose-file.pdf'));
+  perform tests.check('nor loose in the bucket with no folder', msg is not null, coalesce(msg, 'it was allowed'));
+
+  -- reading and removing
+  perform tests.check('Alice sees her file and none of Bob''s',
+    tests.rows_for(alice, 'select * from storage.objects where bucket_id = ''deal-documents''') = 1);
+  perform tests.check('Bob sees his file and none of Alice''s',
+    tests.rows_for(bob, 'select * from storage.objects where bucket_id = ''deal-documents''') = 1);
+  perform tests.check('Bob cannot look up Alice''s file by name',
+    tests.rows_for(bob, format('select * from storage.objects where name = %L', a_path)) = 0);
+  perform tests.check('Bob cannot delete Alice''s file', tests.touched(bob, format('delete from storage.objects where name = %L', a_path)) = 0);
+  perform tests.check('nobody can rename or replace a stored file',
+    tests.touched(alice, format('update storage.objects set name = %L where name = %L', alice || '/' || a_tx || '/renamed.pdf', a_path)) = 0);
+  perform tests.become_anon();
+  select count(*) into n from storage.objects;
+  perform tests.back();
+  perform tests.check('the anonymous role sees no files', n = 0);
+  perform tests.check('a signed-in role with no user id sees no files',
+    tests.rows_for('00000000-0000-0000-0000-000000000000', 'select * from storage.objects') = 0);
+
+  -- the record table
+  perform tests.check('Alice records her file', tests.touched(alice, format(
+    'insert into document_files (transaction_id, document_id, file_name, mime_type, size_bytes, storage_path) values (%L, %L, ''contract.pdf'', ''application/pdf'', 2048, %L)', a_tx, a_doc, a_path)) = 1);
+  select id into file_id from document_files where user_id = alice;
+  perform tests.check('Bob cannot see Alice''s file records', tests.rows_for(bob, 'select * from document_files') = 0);
+  perform tests.check('Bob cannot delete or edit them',
+    tests.touched(bob, 'delete from document_files') = 0 and tests.touched(bob, 'update document_files set file_name = ''x.pdf''') = 0);
+  msg := tests.refused(bob, format(rec, a_tx, 'x.pdf', 'application/pdf', 10, alice || '/' || a_tx || '/x.pdf'));
+  perform tests.check('Bob cannot record a file against Alice''s deal', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format('insert into document_files (transaction_id, document_id, file_name, mime_type, size_bytes, storage_path) values (%L, %L, ''x.pdf'', ''application/pdf'', 10, %L)', b_tx, a_doc, bob || '/' || b_tx || '/x.pdf'));
+  perform tests.check('Bob cannot link his file to Alice''s checklist item', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(rec, b_tx, 'x.pdf', 'application/pdf', 10, alice || '/' || b_tx || '/x.pdf'));
+  perform tests.check('a record cannot claim a path in someone else''s folder', msg is not null, coalesce(msg, 'it was allowed'));
+
+  -- bad input
+  msg := tests.refused(bob, format(rec, b_tx, 'x.exe', 'application/x-msdownload', 10, bob || '/' || b_tx || '/x.exe'));
+  perform tests.check('a program file type is refused', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(rec, b_tx, 'x.html', 'text/html', 10, bob || '/' || b_tx || '/x.html'));
+  perform tests.check('a web page file type is refused', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(rec, b_tx, 'big.pdf', 'application/pdf', 10485761, bob || '/' || b_tx || '/big.pdf'));
+  perform tests.check('a file over 10 MB is refused', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(rec, b_tx, 'empty.pdf', 'application/pdf', 0, bob || '/' || b_tx || '/empty.pdf'));
+  perform tests.check('an empty file is refused', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(rec, b_tx, '../evil.pdf', 'application/pdf', 10, bob || '/' || b_tx || '/evil.pdf'));
+  perform tests.check('a file name with a slash is refused', msg is not null, coalesce(msg, 'it was allowed'));
+  msg := tests.refused(bob, format(rec, b_tx, 'ok.pdf', 'application/pdf', 10, bob || '/' || b_tx || '/../' || alice || '/sneaky.pdf'));
+  perform tests.check('a path that climbs out of the folder is refused', msg is not null, coalesce(msg, 'it was allowed'));
+
+  -- clean-up behaviour
+  delete from documents where id = a_doc;
+  perform tests.check('deleting a checklist item keeps the file on the deal',
+    (select count(*) from document_files where id = file_id) = 1 and (select document_id from document_files where id = file_id) is null);
+  select id into b_pa from people where user_id = bob and role = 'agent';
+  select id into b_pc from people where user_id = bob and role = 'client';
+  perform tests.become(bob);
+  insert into transactions (type, property_address, client_id, agent_id) values ('buyer', '9 Temp Street', b_pc, b_pa) returning id into tmp_tx;
+  insert into document_files (transaction_id, file_name, mime_type, size_bytes, storage_path)
+    values (tmp_tx, 'temp.pdf', 'application/pdf', 10, bob || '/' || tmp_tx || '/temp.pdf');
+  delete from transactions where id = tmp_tx;
+  perform tests.back();
+  perform tests.check('deleting a deal removes its file records',
+    (select count(*) from document_files where transaction_id = tmp_tx) = 0);
+end $$;
+
 -- ---- 7. deleting things cleans up only what belongs to them ----
 do $$
 declare
