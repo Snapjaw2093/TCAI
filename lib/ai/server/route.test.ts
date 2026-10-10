@@ -61,7 +61,7 @@ const json = async (res: Response) => (await res.json()) as Record<string, unkno
 describe("GET /api/ai/draft", () => {
   it("says whether AI drafting is set up, without revealing anything", async () => {
     let r = await json(await GET());
-    assert.deepEqual(r, { configured: true });
+    assert.deepEqual(r, { configured: true, provider: "anthropic", model: "default" });
     delete env.ANTHROPIC_API_KEY;
     r = await json(await GET());
     assert.deepEqual(r, { configured: false });

@@ -253,7 +253,7 @@ export default function AiDraftPanel({
         <div role="alert" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <p className="font-medium">AI drafting isn&apos;t set up yet.</p>
           <p>
-            The site owner needs to add an <code>ANTHROPIC_API_KEY</code> (see the README, “AI drafting”). You can still use
+            The site owner needs to add an <code>ANTHROPIC_API_KEY</code> or <code>GEMINI_API_KEY</code> (see the README, “AI drafting”). You can still use
             “New email” to fill in your templates.
           </p>
         </div>

@@ -68,12 +68,17 @@ Think of it like a junior assistant who is handed a sticky note, not the whole f
 
 ### Setup
 
-1. Get an API key from [console.anthropic.com](https://console.anthropic.com) and set a monthly spend limit there.
+1. Pick one AI service and get a key:
+   - **Google Gemini** (has a free tier): create a key in [Google AI Studio](https://aistudio.google.com). **Check Google's current terms before using real client data on the free tier:** free-tier prompts may be used to improve Google's products, while paid use is treated differently.
+   - **Anthropic Claude:** a key from [console.anthropic.com](https://console.anthropic.com); set a monthly spend limit there.
 2. Add it as an environment variable. Locally, in `.env.local`; on Vercel, under **Settings > Environment Variables**, then redeploy:
 
 | Variable | Required | What it does |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | yes | Your key. **Server-only.** Never give it a `NEXT_PUBLIC_` name; that would publish it to every visitor. |
+| `GEMINI_API_KEY` | one of the two | Your Gemini key. **Server-only.** Never give it a `NEXT_PUBLIC_` name; that would publish it to every visitor. |
+| `ANTHROPIC_API_KEY` | one of the two | Your Claude key. Same rule. |
+| `AI_PROVIDER` | no | `gemini` or `anthropic`. If unset, whichever key exists is used (Claude if both). |
+| `GEMINI_MODEL` | no | Gemini model (default `gemini-2.5-flash`). Google renames models over time: if drafting says the model isn't available, set this to a current one from AI Studio. |
 | `ANTHROPIC_MODEL` | no | Model to use (default `claude-opus-5-5`). `claude-sonnet-5-5` or `claude-haiku-5-5` are cheaper and faster. |
 | `ANTHROPIC_EFFORT` | no | `low`, `medium` (default), `high`, or `off`. |
 | `AI_TIMEOUT_MS` | no | Give up on the AI after this long (default 45000). |
@@ -83,6 +88,8 @@ Think of it like a junior assistant who is handed a sticky note, not the whole f
 | `AI_ALLOW_ANONYMOUS` | no | `true` lets visitors without a login use AI on a live site that has no Supabase. Leave unset. |
 
 3. Run the latest `supabase/schema.sql` in the Supabase SQL Editor (it adds a column and allows an "ai" draft kind). The app shows the SQL with a Copy button if it is missing.
+
+**Check your setup:** open `/api/ai/draft` on your site. It shows `{"configured":true,"provider":"gemini",...}` (never the key). Then make a draft with a made-up deal.
 
 Without a key the page simply says AI drafting isn't set up, and the rest of the app works as before.
 

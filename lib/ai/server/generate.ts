@@ -1,36 +1,27 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { allowedText, extractGaps, findUnsupportedDetails, stripSignOff } from "@/lib/ai/check";
 import { buildUserMessage, outputSchema, SYSTEM_PROMPT } from "@/lib/ai/prompt";
+import { AiError } from "@/lib/ai/server/errors";
+import { askGemini, DEFAULT_GEMINI_MODEL } from "@/lib/ai/server/gemini";
+import type { Provider } from "@/lib/ai/server/provider";
 import type { AiDraftRequest, AiDraftResult } from "@/lib/ai/types";
 
-// Asks Claude to write the draft, then checks what came back. Runs only on the
+// Asks the chosen AI (Claude or Gemini) to write the draft, then checks what came back. Runs only on the
 // server: this is the one place the API key is used.
 
 // Claude Opus 5.5 is a strong default. Cheaper models work too: set
 // ANTHROPIC_MODEL (for example claude-sonnet-5-5 or claude-haiku-5-5).
 export const DEFAULT_MODEL = "claude-opus-5-5";
 
-// A problem the person should hear about, in plain words, with the HTTP status to send.
-export class AiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public retryAfterSeconds?: number,
-  ) {
-    super(message);
-  }
-}
+export { AiError };
 
 const strings = (v: unknown, max: number, each: number): string[] =>
   Array.isArray(v)
     ? v.filter((x): x is string => typeof x === "string").map((x) => x.trim().slice(0, each)).filter(Boolean).slice(0, max)
     : [];
 
-export async function writeDraft(
-  req: AiDraftRequest,
-  options: { apiKey: string; model?: string },
-): Promise<AiDraftResult> {
-  const model = options.model || DEFAULT_MODEL;
+// Claude: structured JSON output, so the reply is already in the right shape.
+async function askClaude(req: AiDraftRequest, options: { apiKey: string; model: string }): Promise<{ text: string; model: string }> {
   // ANTHROPIC_BASE_URL (if set) is read by the SDK itself; used by our tests.
   const timeout = Number.parseInt(process.env.AI_TIMEOUT_MS ?? "", 10) || 45_000;
   const client = new Anthropic({ apiKey: options.apiKey, maxRetries: 1, timeout });
@@ -41,7 +32,7 @@ export async function writeDraft(
   let response: Anthropic.Message;
   try {
     response = await client.messages.create({
-      model,
+      model: options.model,
       max_tokens: 4000,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildUserMessage(req) }],
@@ -60,8 +51,20 @@ export async function writeDraft(
   if (response.stop_reason === "max_tokens") {
     throw new AiError("The draft was cut off before it finished. Please try again.", 502);
   }
+  return { text: response.content.map((b) => (b.type === "text" ? b.text : "")).join(""), model: response.model };
+}
 
-  const text = response.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+export async function writeDraft(
+  req: AiDraftRequest,
+  options: { apiKey: string; model?: string; provider?: Provider },
+): Promise<AiDraftResult> {
+  const answer =
+    options.provider === "gemini"
+      ? await askGemini(buildUserMessage(req), { apiKey: options.apiKey, model: options.model || DEFAULT_GEMINI_MODEL })
+      : await askClaude(req, { apiKey: options.apiKey, model: options.model || DEFAULT_MODEL });
+
+  // Even with a JSON-only instruction a model may wrap the JSON in a code fence.
+  const text = answer.text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(text);
@@ -86,7 +89,7 @@ export async function writeDraft(
     // Our own check, not the AI's word for it.
     warnings: findUnsupportedDetails(`${subject}\n${body}`, allowedText(req)),
     usedFactIds: strings(parsed.used_fact_ids, 60, 40).filter((id) => knownIds.has(id)),
-    model: response.model,
+    model: answer.model,
   };
 }
 

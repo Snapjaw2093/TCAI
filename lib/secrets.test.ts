@@ -24,12 +24,12 @@ test("no app code touches a service-role / secret Supabase key", () => {
 });
 
 test("secrets never get a NEXT_PUBLIC_ name", () => {
-  const bad = files.filter((f) => /NEXT_PUBLIC_\w*(SECRET|SERVICE|ANTHROPIC|API_KEY|PRIVATE)/.test(readFileSync(f, "utf8")));
+  const bad = files.filter((f) => /NEXT_PUBLIC_\w*(SECRET|SERVICE|ANTHROPIC|GEMINI|API_KEY|PRIVATE)/.test(readFileSync(f, "utf8")));
   assert.deepEqual(bad, []);
 });
 
 test("browser code never reads the AI key from the environment", () => {
   const clientFiles = files.filter((f) => /^(components|lib\/(data|ai\/client))/.test(f) || readFileSync(f, "utf8").startsWith('"use client"'));
-  const bad = clientFiles.filter((f) => /process\.env\.ANTHROPIC/.test(readFileSync(f, "utf8")));
+  const bad = clientFiles.filter((f) => /process\.env\.(ANTHROPIC|GEMINI)/.test(readFileSync(f, "utf8")));
   assert.deepEqual(bad, []);
 });
