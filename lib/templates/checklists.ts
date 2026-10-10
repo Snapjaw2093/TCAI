@@ -7,7 +7,7 @@ import type { DocumentItem, Task, TransactionType } from "@/lib/types";
 type Anchor = "contract" | "closing";
 type Due = { anchor: Anchor; dueDays: number };
 
-type TaskTemplate = { title: string; due?: Due };
+type TaskTemplate = { title: string; due?: Due; key?: string };
 type DocumentTemplate = { name: string; required: boolean; due?: Due };
 
 type ChecklistTemplate = {
@@ -17,7 +17,7 @@ type ChecklistTemplate = {
 
 const shared: ChecklistTemplate = {
   tasks: [
-    { title: "Send welcome email to client and agent" },
+    { title: "Send welcome email to client and agent", key: "welcome-email" },
     { title: "Confirm contract is fully executed", due: { anchor: "contract", dueDays: 1 } },
     { title: "Open title / escrow", due: { anchor: "contract", dueDays: 2 } },
     { title: "Deliver earnest money deposit", due: { anchor: "contract", dueDays: 3 } },
@@ -90,6 +90,7 @@ export function buildChecklist(
       title: t.title,
       dueDate: dueDate(t.due, contractDate, closingDate),
       status: "open" as const,
+      key: t.key,
     })),
     documents: template.documents.map((d) => ({
       name: d.name,

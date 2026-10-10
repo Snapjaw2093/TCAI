@@ -29,6 +29,7 @@ export interface DataStore {
 
   listDrafts(transactionId?: string): Promise<EmailDraft[]>;
   saveDraft(d: EmailDraft | NewRecord<EmailDraft>): Promise<EmailDraft>;
+  deleteDraft(id: string): Promise<void>;
 
   resetToSampleData(): Promise<void>;
 }

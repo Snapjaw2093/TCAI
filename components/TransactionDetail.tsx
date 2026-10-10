@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import ChecklistPanel from "@/components/ChecklistPanel";
 import DocumentList from "@/components/DocumentList";
+import EmailsPanel from "@/components/EmailsPanel";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
 import { applyTemplate } from "@/lib/data/checklist";
+import { buildWelcomeEmail } from "@/lib/templates/emails";
 import { db } from "@/lib/data";
 import { formatDate, formatPrice, relativeDays } from "@/lib/format";
 import type {
@@ -20,6 +22,7 @@ import type {
 
 type Loaded = {
   transaction: Transaction;
+  people: Person[];
   client: Person | undefined;
   agent: Person | undefined;
   tasks: Task[];
@@ -71,6 +74,7 @@ export default function TransactionDetail({ id }: { id: string }) {
       const people = await db.listPeople();
       setData({
         transaction,
+        people,
         client: people.find((p) => p.id === transaction.clientId),
         agent: people.find((p) => p.id === transaction.agentId),
         tasks: await db.listTasks(id),
@@ -97,6 +101,49 @@ export default function TransactionDetail({ id }: { id: string }) {
     setData({ ...data, transaction });
   }
 
+  async function createWelcomeDraft(recipient: Person) {
+    if (!data || !data.client || !data.agent) return;
+    const content = buildWelcomeEmail(
+      recipient,
+      data.transaction,
+      data.client,
+      data.agent,
+      data.documents,
+    );
+    const draft = await db.saveDraft({
+      transactionId: data.transaction.id,
+      recipientId: recipient.id,
+      kind: "welcome",
+      ...content,
+      status: "draft",
+      createdAt: new Date().toISOString(),
+      sentAt: null,
+    });
+    setData({ ...data, drafts: [...data.drafts, draft] });
+  }
+
+  async function updateDraft(draft: EmailDraft) {
+    if (!data) return;
+    await db.saveDraft(draft);
+    let tasks = data.tasks;
+    // Sending the welcome email also ticks off the matching checklist task.
+    if (draft.status === "sent" && draft.kind === "welcome") {
+      const task = tasks.find((x) => x.key === "welcome-email" && x.status === "open");
+      if (task) {
+        const done: Task = { ...task, status: "done" };
+        await db.saveTask(done);
+        tasks = tasks.map((x) => (x.id === done.id ? done : x));
+      }
+    }
+    setData({ ...data, tasks, drafts: data.drafts.map((x) => (x.id === draft.id ? draft : x)) });
+  }
+
+  async function removeDraft(draft: EmailDraft) {
+    if (!data) return;
+    await db.deleteDraft(draft.id);
+    setData({ ...data, drafts: data.drafts.filter((x) => x.id !== draft.id) });
+  }
+
   async function generateChecklist() {
     if (!data) return;
     const { tasks, documents } = await applyTemplate(data.transaction);
@@ -116,7 +163,7 @@ export default function TransactionDetail({ id }: { id: string }) {
     );
   }
 
-  const { transaction: t, client, agent, tasks, documents, drafts } = data;
+  const { transaction: t, people, client, agent, tasks, documents, drafts } = data;
   const tasksDone = tasks.filter((x) => x.status !== "open").length;
   const requiredDocs = documents.filter((x) => x.required);
   const requiredReceived = requiredDocs.filter((x) => x.status === "received").length;
@@ -217,12 +264,15 @@ export default function TransactionDetail({ id }: { id: string }) {
           <DocumentList documents={documents} onChange={updateDocument} />
         )
       ) : (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
-          <p className="font-medium text-slate-900">Emails are coming in the next stage</p>
-          <p className="mt-1 text-sm text-slate-500">
-            This deal has {drafts.length} saved so far.
-          </p>
-        </div>
+        <EmailsPanel
+          drafts={drafts}
+          client={client}
+          agent={agent}
+          people={people}
+          onCreateWelcome={createWelcomeDraft}
+          onChange={updateDraft}
+          onDelete={removeDraft}
+        />
       )}
     </div>
   );

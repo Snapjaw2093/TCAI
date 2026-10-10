@@ -105,6 +105,12 @@ export const localStore: DataStore = {
     return saved;
   },
 
+  async deleteDraft(id) {
+    const db = load();
+    db.drafts = db.drafts.filter((d) => d.id !== id);
+    persist(db);
+  },
+
   async resetToSampleData() {
     persist(makeSampleData() as Db);
   },

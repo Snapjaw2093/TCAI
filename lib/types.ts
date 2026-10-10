@@ -33,6 +33,8 @@ export type Task = {
   title: string;
   dueDate: string | null;
   status: "open" | "done" | "skipped";
+  // Set on tasks the app knows how to complete itself, e.g. "welcome-email".
+  key?: string;
 };
 
 export type DocumentItem = {
