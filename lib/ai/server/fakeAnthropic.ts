@@ -49,3 +49,14 @@ export async function startFakeAnthropic(respond: (rec: Recorded) => Reply | Pro
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
+
+// The same idea for Google Gemini's generateContent answers.
+export function geminiReply(content: unknown, extra: Record<string, unknown> = {}): Reply {
+  return {
+    json: {
+      candidates: [{ content: { role: "model", parts: [{ text: typeof content === "string" ? content : JSON.stringify(content) }] }, finishReason: "STOP" }],
+      modelVersion: "gemini-test",
+      ...extra,
+    },
+  };
+}

@@ -3,11 +3,13 @@ import { checkRateLimit } from "@/lib/ai/rateLimit";
 import { requiredProblems } from "@/lib/ai/rules";
 import { identifyCaller } from "@/lib/ai/server/auth";
 import { AiError, writeDraft } from "@/lib/ai/server/generate";
+import { resolveProvider } from "@/lib/ai/server/provider";
 import { validateRequest } from "@/lib/ai/validate";
 
-// POST /api/ai/draft - asks Claude to write one email draft.
+// POST /api/ai/draft - asks the AI (Claude or Google Gemini) to write one email draft.
 //
-// The AI key lives ONLY here, in the ANTHROPIC_API_KEY environment variable.
+// The AI key lives ONLY here, in a server environment variable (ANTHROPIC_API_KEY
+// or GEMINI_API_KEY).
 // It is never sent to the browser. This route only reads what it is sent and
 // answers with text: it cannot send email, contact anyone, or change any saved
 // transaction data.
@@ -28,14 +30,17 @@ export async function GET() {
   } catch {
     /* not in a request */
   }
-  return reply({ configured: Boolean(process.env.ANTHROPIC_API_KEY?.trim()) });
+  // Says which service is in use (never the key), so you can check your setup
+  // by opening /api/ai/draft in a browser.
+  const config = resolveProvider();
+  return reply({ configured: Boolean(config), ...(config ? { provider: config.provider, model: config.model ?? "default" } : {}) });
 }
 
 export async function POST(request: Request) {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) {
+  const config = resolveProvider();
+  if (!config) {
     return reply(
-      { code: "not_configured", error: "AI drafting isn't set up yet. The site owner needs to add an ANTHROPIC_API_KEY." },
+      { code: "not_configured", error: "AI drafting isn't set up yet. The site owner needs to add an ANTHROPIC_API_KEY or GEMINI_API_KEY." },
       503,
     );
   }
@@ -82,7 +87,7 @@ export async function POST(request: Request) {
 
   // 5. Write it.
   try {
-    const result = await writeDraft(draft, { apiKey, model: process.env.ANTHROPIC_MODEL?.trim() || undefined });
+    const result = await writeDraft(draft, config);
     return reply(result);
   } catch (error) {
     if (error instanceof AiError) {
