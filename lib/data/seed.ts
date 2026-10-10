@@ -1,10 +1,12 @@
 import { addDays, format } from "date-fns";
 import { buildChecklist } from "@/lib/templates/checklists";
-import type {
-  DocumentItem,
-  Person,
-  Task,
-  Transaction,
+import {
+  defaultSettings,
+  type DocumentItem,
+  type Person,
+  type Settings,
+  type Task,
+  type Transaction,
 } from "@/lib/types";
 
 // Sample deals so the app isn't empty on first launch.
@@ -16,6 +18,7 @@ export type Database = {
   tasks: Task[];
   documents: DocumentItem[];
   drafts: never[];
+  settings: Settings;
 };
 
 const day = (offset: number) => format(addDays(new Date(), offset), "yyyy-MM-dd");
@@ -68,5 +71,5 @@ export function makeSampleData(): Database {
     );
   }
 
-  return { transactions, people, tasks, documents, drafts: [] };
+  return { transactions, people, tasks, documents, drafts: [], settings: defaultSettings };
 }

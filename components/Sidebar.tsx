@@ -8,6 +8,7 @@ const links = [
   { href: "/transactions", label: "Transactions" },
   { href: "/follow-ups", label: "Follow-ups" },
   { href: "/settings/templates", label: "Templates" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export default function Sidebar() {
@@ -15,7 +16,9 @@ export default function Sidebar() {
 
   // "/" only matches itself; other links also match their sub-pages.
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === "/" || href === "/settings"
+      ? pathname === href
+      : pathname.startsWith(href);
 
   return (
     <aside className="border-b border-slate-200 bg-white md:min-h-screen md:w-60 md:border-b-0 md:border-r">

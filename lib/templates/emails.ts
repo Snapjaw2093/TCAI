@@ -1,13 +1,21 @@
 import { dueLabel, formatDate } from "@/lib/format";
 import type { FollowUpItem } from "@/lib/followups";
-import type { DocumentItem, Person, Transaction } from "@/lib/types";
+import type { DocumentItem, Person, Settings, Transaction } from "@/lib/types";
 
 // Email wording lives here as plain text with blanks filled from the deal.
 // To change how the emails read, edit the sentences below.
 
 const firstName = (person: Person) => person.name.split(" ")[0];
 
-const signature = "Best regards,\n[Your name]\nTransaction Coordinator";
+const defaultSignature = "Best regards,\n[Your name]\nTransaction Coordinator";
+
+export function buildSignature(settings: Settings): string {
+  return (
+    `Best regards,\n${settings.name.trim() || "[Your name]"}` +
+    `${settings.title.trim() ? `\n${settings.title.trim()}` : ""}` +
+    `${settings.company.trim() ? `\n${settings.company.trim()}` : ""}`
+  );
+}
 
 function keyDates(t: Transaction): string {
   const lines = [];
@@ -33,6 +41,7 @@ export function buildWelcomeEmail(
   client: Person,
   agent: Person,
   documents: DocumentItem[],
+  signature: string = defaultSignature,
 ): DraftContent {
   const t = transaction;
   const buying = t.type === "buyer";
@@ -78,6 +87,7 @@ export function buildFollowUpEmail(
   client: Person,
   agent: Person,
   items: FollowUpItem[],
+  signature: string = defaultSignature,
 ): DraftContent {
   const t = transaction;
   const documents = items.filter((i) => i.kind === "document");

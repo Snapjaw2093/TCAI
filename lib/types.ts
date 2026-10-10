@@ -57,3 +57,16 @@ export type EmailDraft = {
   createdAt: string;
   sentAt: string | null;
 };
+
+// Who is writing the emails. Used for the signature at the bottom of each draft.
+export type Settings = {
+  name: string;
+  title: string;
+  company: string;
+};
+
+export const defaultSettings: Settings = {
+  name: "",
+  title: "Transaction Coordinator",
+  company: "",
+};

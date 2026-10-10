@@ -8,7 +8,7 @@ import EmailsPanel from "@/components/EmailsPanel";
 import ProgressBar from "@/components/ProgressBar";
 import StatusBadge from "@/components/StatusBadge";
 import { applyTemplate } from "@/lib/data/checklist";
-import { buildWelcomeEmail } from "@/lib/templates/emails";
+import { buildSignature, buildWelcomeEmail } from "@/lib/templates/emails";
 import { db } from "@/lib/data";
 import { formatDate, formatPrice, relativeDays } from "@/lib/format";
 import type {
@@ -112,6 +112,7 @@ export default function TransactionDetail({ id }: { id: string }) {
       data.client,
       data.agent,
       data.documents,
+      buildSignature(await db.getSettings()),
     );
     const draft = await db.saveDraft({
       transactionId: data.transaction.id,

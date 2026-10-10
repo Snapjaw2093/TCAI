@@ -2,6 +2,7 @@ import type {
   DocumentItem,
   EmailDraft,
   Person,
+  Settings,
   Task,
   Transaction,
 } from "@/lib/types";
@@ -30,6 +31,9 @@ export interface DataStore {
   listDrafts(transactionId?: string): Promise<EmailDraft[]>;
   saveDraft(d: EmailDraft | NewRecord<EmailDraft>): Promise<EmailDraft>;
   deleteDraft(id: string): Promise<void>;
+
+  getSettings(): Promise<Settings>;
+  saveSettings(settings: Settings): Promise<void>;
 
   resetToSampleData(): Promise<void>;
 }

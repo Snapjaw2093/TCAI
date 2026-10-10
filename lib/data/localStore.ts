@@ -1,6 +1,6 @@
 import type { DataStore } from "@/lib/data/store";
 import { makeSampleData, type Database } from "@/lib/data/seed";
-import type { EmailDraft } from "@/lib/types";
+import { defaultSettings, type EmailDraft } from "@/lib/types";
 
 // The browser-storage version of the front desk.
 // Everything lives in one box (a single localStorage entry).
@@ -111,7 +111,19 @@ export const localStore: DataStore = {
     persist(db);
   },
 
+  async getSettings() {
+    // Data saved before settings existed has no settings entry yet.
+    return { ...defaultSettings, ...load().settings };
+  },
+  async saveSettings(settings) {
+    const db = load();
+    db.settings = settings;
+    persist(db);
+  },
+
   async resetToSampleData() {
-    persist(makeSampleData() as Db);
+    // Sample deals come back, but your name and signature are kept.
+    const settings = load().settings;
+    persist({ ...makeSampleData(), settings } as Db);
   },
 };

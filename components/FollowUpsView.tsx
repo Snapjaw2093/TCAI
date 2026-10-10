@@ -7,7 +7,7 @@ import { db } from "@/lib/data";
 import { createDraft } from "@/lib/data/drafts";
 import { findFollowUps, type FollowUpItem } from "@/lib/followups";
 import { dueLabel, formatDate } from "@/lib/format";
-import { buildFollowUpEmail } from "@/lib/templates/emails";
+import { buildFollowUpEmail, buildSignature } from "@/lib/templates/emails";
 import type {
   DocumentItem,
   EmailDraft,
@@ -41,11 +41,13 @@ function ItemRow({
 }) {
   const late = item.daysUntil < 0;
   return (
-    <li className="flex flex-wrap items-center gap-3 px-5 py-3">
-      <span className="w-20 shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3">
+      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 sm:w-20">
         {kindLabel[item.kind]}
       </span>
-      <span className="min-w-0 flex-1 text-sm text-slate-900">{item.title}</span>
+      <span className="basis-full text-sm text-slate-900 sm:min-w-0 sm:flex-1 sm:basis-auto">
+        {item.title}
+      </span>
       <span className={`text-xs ${late ? "font-medium text-rose-600" : "text-slate-500"}`}>
         {formatDate(item.dueDate)} · {dueLabel(item.daysUntil)}
       </span>
@@ -118,7 +120,14 @@ export default function FollowUpsView() {
       deal.id,
       recipient,
       "follow-up",
-      buildFollowUpEmail(recipient, deal, client, agent, items),
+      buildFollowUpEmail(
+        recipient,
+        deal,
+        client,
+        agent,
+        items,
+        buildSignature(await db.getSettings()),
+      ),
     );
     setData((d) => d && { ...d, drafts: [...d.drafts, draft] });
   }
@@ -163,7 +172,7 @@ export default function FollowUpsView() {
                 className="overflow-hidden rounded-xl border border-slate-200 bg-white"
               >
                 <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-5 py-4">
-                  <div className="min-w-0 flex-1">
+                  <div className="basis-full sm:min-w-0 sm:flex-1 sm:basis-auto">
                     <Link
                       href={`/transactions/${deal.id}`}
                       className="font-medium text-slate-900 hover:text-indigo-700"
