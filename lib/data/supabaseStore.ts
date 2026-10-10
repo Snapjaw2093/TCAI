@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { DataStore } from "@/lib/data/store";
 import { makeSampleData } from "@/lib/data/seed";
+import { withDefaults } from "@/lib/templates";
 import type { Db } from "@/lib/data/localStore";
 import {
   defaultSettings,
@@ -10,6 +11,7 @@ import {
   type Settings,
   type Task,
   type Transaction,
+  type UserTemplates,
 } from "@/lib/types";
 
 // The cloud version of the "front desk": same functions as the browser
@@ -222,6 +224,24 @@ export const supabaseStore: DataStore = {
       check(await c.from("settings").update(settings).eq("user_id", String(existing.user_id)));
     } else {
       check(await c.from("settings").insert(settings));
+    }
+  },
+
+  // Templates are stored as one row of JSON per account. If the table isn't
+  // there yet (the SQL hasn't been re-run), the built-in templates are used so
+  // the rest of the app keeps working; only saving reports the problem.
+  async getTemplates() {
+    const result = await client().from("templates").select("*").maybeSingle();
+    if (result.error || !result.data) return withDefaults(null);
+    return withDefaults(result.data as unknown as Partial<UserTemplates>);
+  },
+  async saveTemplates(templates) {
+    const c = client();
+    const existing = check(await c.from("templates").select("user_id").maybeSingle()) as Row | null;
+    if (existing) {
+      check(await c.from("templates").update(templates).eq("user_id", String(existing.user_id)));
+    } else {
+      check(await c.from("templates").insert(templates));
     }
   },
 

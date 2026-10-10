@@ -71,6 +71,13 @@ create table if not exists public.settings (
   company text not null default ''
 );
 
+-- Your edited checklists and email wording, one row per account.
+create table if not exists public.templates (
+  user_id    uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  checklists jsonb not null,
+  emails     jsonb not null
+);
+
 -- Indexes: make "all tasks for this deal" style lookups fast.
 create index if not exists transactions_user_idx on public.transactions (user_id);
 create index if not exists people_user_idx       on public.people (user_id);
@@ -82,7 +89,7 @@ create index if not exists drafts_transaction_idx on public.email_drafts (transa
 do $$
 declare t text;
 begin
-  foreach t in array array['people', 'transactions', 'tasks', 'documents', 'email_drafts', 'settings']
+  foreach t in array array['people', 'transactions', 'tasks', 'documents', 'email_drafts', 'settings', 'templates']
   loop
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "own rows" on public.%I', t);

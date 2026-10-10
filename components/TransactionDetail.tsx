@@ -113,6 +113,7 @@ export default function TransactionDetail({ id }: { id: string }) {
       data.agent,
       data.documents,
       buildSignature(await db.getSettings()),
+      (await db.getTemplates()).emails,
     );
     const draft = await db.saveDraft({
       transactionId: data.transaction.id,

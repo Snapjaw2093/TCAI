@@ -17,6 +17,7 @@ Open http://localhost:3000. The app starts with two sample deals. You can reset 
 - **Transactions:** create buyer or seller deals; each gets a checklist and required-document list from a template.
 - **Follow-ups:** everything overdue or due soon across all deals, with one-click drafts for the client or agent.
 - **Emails:** edit, approve, copy, and mark drafts as sent.
+- **Templates:** edit the checklists (tasks, documents, and when each is due) and the wording of the five email templates. Changes apply to new deals and drafts.
 - **Settings:** your name and signature for the bottom of each email.
 
 ## Project layout
@@ -24,7 +25,7 @@ Open http://localhost:3000. The app starts with two sample deals. You can reset 
 - `app/` – pages (each folder is a URL)
 - `components/` – reusable pieces of the interface
 - `lib/types.ts` – the shape of every record (transaction, task, document, draft…)
-- `lib/templates/` – checklist and email wording; edit these to change what gets generated
+- `lib/templates/` – the built-in checklists and email wording (your edits on the Templates page are saved and used instead)
 - `lib/followups.ts` – works out what needs attention
 - `lib/data/` – the "front desk" for saving and loading records
 
@@ -45,3 +46,9 @@ The app saves data one of two ways, chosen automatically by `lib/data/index.ts`:
 Never put the `service_role` / secret key or the database password in this app or in Git.
 
 Deals made before you had an account can be copied in from **Settings > Import into my account**.
+
+When `supabase/schema.sql` changes (for example, the `templates` table for the Templates page), run the new version in the SQL Editor again. It is safe to repeat, and the app keeps working with the built-in templates until you do.
+
+### Email template blanks
+
+Email templates use `{{placeholders}}` such as `{{client_first_name}}` or `{{property_address}}`. Lists like `{{documents_needed}}` expand to a heading plus bullets and disappear when empty; write `{{documents_needed|Your own heading}}` to change the heading. The full list is on the Templates page.

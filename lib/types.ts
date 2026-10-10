@@ -70,3 +70,45 @@ export const defaultSettings: Settings = {
   title: "Transaction Coordinator",
   company: "",
 };
+
+// ---- Templates you can edit on the Templates page ----
+
+// "Due 2 days after the contract date" = { anchor: "contract", dueDays: 2 }.
+// Negative days mean before the date.
+export type DueRule = { anchor: "contract" | "closing"; dueDays: number };
+
+export type TaskTemplate = {
+  title: string;
+  due?: DueRule | null;
+  // Marks a task the app can tick off itself, e.g. "welcome-email".
+  key?: string;
+};
+
+export type DocumentTemplate = {
+  name: string;
+  required: boolean;
+  due?: DueRule | null;
+};
+
+export type ChecklistTemplate = {
+  tasks: TaskTemplate[];
+  documents: DocumentTemplate[];
+};
+
+export type ChecklistTemplates = Record<TransactionType, ChecklistTemplate>;
+
+export type EmailTemplate = { subject: string; body: string };
+
+export type EmailTemplateKey =
+  | "welcomeClient"
+  | "welcomeAgent"
+  | "followUpClientLate"
+  | "followUpClientUpcoming"
+  | "followUpAgent";
+
+export type EmailTemplates = Record<EmailTemplateKey, EmailTemplate>;
+
+export type UserTemplates = {
+  checklists: ChecklistTemplates;
+  emails: EmailTemplates;
+};

@@ -4,6 +4,7 @@ import type {
   Person,
   Settings,
   Task,
+  UserTemplates,
   Transaction,
 } from "@/lib/types";
 
@@ -34,6 +35,10 @@ export interface DataStore {
 
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;
+
+  // Your edited checklists and emails (built-in ones fill any gaps).
+  getTemplates(): Promise<UserTemplates>;
+  saveTemplates(templates: UserTemplates): Promise<void>;
 
   resetToSampleData(): Promise<void>;
 }

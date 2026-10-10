@@ -1,19 +1,16 @@
 import { addDays, format, parseISO } from "date-fns";
-import type { DocumentItem, Task, TransactionType } from "@/lib/types";
+import type {
+  ChecklistTemplate,
+  ChecklistTemplates,
+  DocumentItem,
+  DueRule,
+  Task,
+  TransactionType,
+} from "@/lib/types";
 
-// Templates are plain lists. To change a checklist, edit the list below.
+// These are the built-in checklists. You can change them on the Templates
+// page; your changes are saved and used instead of these.
 // "dueDays" means: this many days after (+) or before (-) the anchor date.
-
-type Anchor = "contract" | "closing";
-type Due = { anchor: Anchor; dueDays: number };
-
-type TaskTemplate = { title: string; due?: Due; key?: string };
-type DocumentTemplate = { name: string; required: boolean; due?: Due };
-
-type ChecklistTemplate = {
-  tasks: TaskTemplate[];
-  documents: DocumentTemplate[];
-};
 
 const shared: ChecklistTemplate = {
   tasks: [
@@ -32,7 +29,7 @@ const shared: ChecklistTemplate = {
   ],
 };
 
-export const checklistTemplates: Record<TransactionType, ChecklistTemplate> = {
+export const defaultChecklistTemplates: ChecklistTemplates = {
   buyer: {
     tasks: [
       ...shared.tasks,
@@ -64,7 +61,7 @@ export const checklistTemplates: Record<TransactionType, ChecklistTemplate> = {
 };
 
 function dueDate(
-  due: Due | undefined,
+  due: DueRule | null | undefined,
   contractDate: string | null,
   closingDate: string | null,
 ): string | null {
@@ -80,11 +77,12 @@ export function buildChecklist(
   type: TransactionType,
   contractDate: string | null,
   closingDate: string | null,
+  templates: ChecklistTemplates = defaultChecklistTemplates,
 ): {
   tasks: Omit<Task, "id" | "transactionId">[];
   documents: Omit<DocumentItem, "id" | "transactionId">[];
 } {
-  const template = checklistTemplates[type];
+  const template = templates[type];
   return {
     tasks: template.tasks.map((t) => ({
       title: t.title,

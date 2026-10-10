@@ -1,6 +1,7 @@
 import type { DataStore } from "@/lib/data/store";
 import { makeSampleData, type Database } from "@/lib/data/seed";
-import { defaultSettings, type EmailDraft } from "@/lib/types";
+import { withDefaults } from "@/lib/templates";
+import { defaultSettings, type EmailDraft, type UserTemplates } from "@/lib/types";
 
 // The browser-storage version of the front desk.
 // Everything lives in one box (a single localStorage entry).
@@ -8,7 +9,10 @@ import { defaultSettings, type EmailDraft } from "@/lib/types";
 
 const KEY = "tc-assistant-db-v1";
 
-export type Db = Omit<Database, "drafts"> & { drafts: EmailDraft[] };
+export type Db = Omit<Database, "drafts"> & {
+  drafts: EmailDraft[];
+  templates?: UserTemplates; // missing until you edit a template
+};
 
 function load(): Db {
   const raw = window.localStorage.getItem(KEY);
@@ -121,10 +125,19 @@ export const localStore: DataStore = {
     persist(db);
   },
 
+  async getTemplates() {
+    return withDefaults(load().templates);
+  },
+  async saveTemplates(templates) {
+    const db = load();
+    db.templates = templates;
+    persist(db);
+  },
+
   async resetToSampleData() {
-    // Sample deals come back, but your name and signature are kept.
-    const settings = load().settings;
-    persist({ ...makeSampleData(), settings } as Db);
+    // Sample deals come back, but your signature and templates are kept.
+    const { settings, templates } = load();
+    persist({ ...makeSampleData(), settings, templates } as Db);
   },
 };
 
