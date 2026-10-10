@@ -21,7 +21,7 @@ Five pages, sharing one set of deals, tasks, documents and drafts:
 - **Email & Follow-ups:** what's overdue or coming up, a composer (pick a deal, a recipient, and what the email is about), and separate Drafts and Sent tabs. Every draft has an editable recipient, subject and message, plus copy, regenerate, save, approve, and mark-as-sent.
 - **Settings:** your signature, defaults (transaction side, follow-up window), task categories, and a Templates tab for the checklists and the five email templates.
 
-**Honest about what it doesn't do:** TC Assistant never sends email. "Generate" fills in your templates with the deal's details; it is not AI writing. A draft is only ever "marked as sent" because you sent it from your own email app and told the app. Nothing talks to Gmail or any other service.
+**Honest about what it doesn't do:** TC Assistant never sends email. "Generate" fills in your templates with the deal's details; that button is not AI. The separate **Draft with AI** button writes a first draft with a language model (see [AI drafting](#ai-drafting)). A draft is only ever "marked as sent" because you sent it from your own email app and told the app. Nothing talks to Gmail or any other service.
 
 ## Project layout
 
@@ -57,3 +57,43 @@ When `supabase/schema.sql` changes, run the new version in the SQL Editor again.
 ### Email template blanks
 
 Email templates use `{{placeholders}}` such as `{{client_first_name}}` or `{{property_address}}`. Lists like `{{documents_needed}}` expand to a heading plus bullets and disappear when empty; write `{{documents_needed|Your own heading}}` to change the heading. The full list is on the Templates page.
+
+## AI drafting
+
+On **Email & Follow-ups** (or the dashboard's "Draft with AI" shortcut) you pick a deal, the kind of email, who it is to, and a tone, optionally add instructions, and the AI writes a subject and message into your Drafts tab. **The AI only drafts.** It cannot send anything, contact anyone, or change a deal; you edit, approve and send it yourself.
+
+Think of it like a junior assistant who is handed a sticky note, not the whole file. The note holds only the facts you can see in "What will be sent to the AI", and the assistant is told to leave a blank for anything that isn't on the note.
+
+### Setup
+
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com) and set a monthly spend limit there.
+2. Add it as an environment variable. Locally, in `.env.local`; on Vercel, under **Settings > Environment Variables**, then redeploy:
+
+| Variable | Required | What it does |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | yes | Your key. **Server-only.** Never give it a `NEXT_PUBLIC_` name; that would publish it to every visitor. |
+| `ANTHROPIC_MODEL` | no | Model to use (default `claude-opus-5-5`). `claude-sonnet-5-5` or `claude-haiku-5-5` are cheaper and faster. |
+| `ANTHROPIC_EFFORT` | no | `low`, `medium` (default), `high`, or `off`. |
+| `AI_TIMEOUT_MS` | no | Give up on the AI after this long (default 45000). |
+| `AI_RATE_LIMIT_PER_MINUTE` | no | Drafts per person per minute (default 6). |
+| `AI_RATE_LIMIT_PER_DAY` | no | Drafts per person per day (default 60). |
+| `AI_GLOBAL_DAILY_LIMIT` | no | Drafts for the whole site per day (default 500). |
+| `AI_ALLOW_ANONYMOUS` | no | `true` lets visitors without a login use AI on a live site that has no Supabase. Leave unset. |
+
+3. Run the latest `supabase/schema.sql` in the Supabase SQL Editor (it adds a column and allows an "ai" draft kind). The app shows the SQL with a Copy button if it is missing.
+
+Without a key the page simply says AI drafting isn't set up, and the rest of the app works as before.
+
+### How it works
+
+- **Server only.** The browser calls `/api/ai/draft`; that route holds the key and talks to the model. With Supabase on, callers must be logged in. Without it, the route is open only during local development.
+- **Minimal facts.** Only the property address, side, today's date, the client and agent names, the recipient's name and role, and the dates, documents and tasks you left ticked are sent. Phone numbers, email addresses, price and private notes are never sent, and neither is an email address you type for the recipient.
+- **No inventing.** The AI must use only those facts and leave `[ADD: …]` gaps for anything else. If something required is missing (for example no document picked for a document reminder), the app asks you before spending anything.
+- **Unverified until you confirm.** Contract and closing dates, deadlines and which documents are required are marked Unverified, and the draft words them as "our records show… please confirm" until you tick "I've checked… against the signed contract".
+- **Double check.** After the AI answers, the app flags any date, amount, email, phone or URL that is not in the source facts. Approve stays disabled while `[ADD: …]` gaps remain or flagged details haven't been reviewed.
+- **Source panel.** Every AI draft shows its source table (what each fact is and where it came from), the facts the AI used, what is still needed from you, and warnings.
+- **Protection against overuse.** Per-minute, per-day and site-wide limits, request-size limit, a timeout, a short wait on the button, and friendly messages for every failure. Limits are kept in server memory, so on serverless hosting they are a speed bump per server instance, not a hard cap; the spend limit in your Anthropic account is the real backstop.
+
+### Tests
+
+`npm test` runs the AI tests (fact-building, validation, the guard that checks the AI's answer, rate limits, and the API route against a pretend model). They make no real API calls and use fictional deals only.

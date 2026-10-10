@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
+import AiDraftPanel from "@/components/AiDraftPanel";
 import DraftList from "@/components/DraftList";
 import EmptyState from "@/components/EmptyState";
 import { ErrorPanel, Loading } from "@/components/LoadState";
@@ -167,6 +168,7 @@ export default function EmailFollowUpsView() {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>("Follow-ups");
   const [composing, setComposing] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [windowDays, setWindowDays] = useState(7);
   const [dealFilter, setDealFilter] = useState("all");
 
@@ -183,6 +185,7 @@ export default function EmailFollowUpsView() {
     const hash = window.location.hash.slice(1);
     setWindowDays(settings.followUpDays);
     if (hash === "compose") setComposing(true);
+    if (hash === "ai") setAiOpen(true);
     if (hash === "drafts") setTab("Drafts");
     if (hash === "sent") setTab("Sent");
     return { transactions, people, tasks, documents, drafts, settings };
@@ -208,7 +211,7 @@ export default function EmailFollowUpsView() {
   if (error && !data) return <ErrorPanel message={error} onRetry={reload} />;
   if (loading || !data) return <Loading label="Loading…" />;
 
-  const { transactions, people, tasks, documents, drafts } = data;
+  const { transactions, people, tasks, documents, drafts, settings } = data;
   const live = transactions.filter((t) => !t.archived);
   const deals = findFollowUps(live, tasks, documents, windowDays);
   const allItems = deals.flatMap((d) => d.items);
@@ -272,10 +275,42 @@ export default function EmailFollowUpsView() {
             </button>
           ))}
         </div>
-        <button onClick={() => setComposing((c) => !c)} className={primary}>
+        <button
+          onClick={() => {
+            setAiOpen((o) => !o);
+            setComposing(false);
+          }}
+          className={primary}
+        >
+          Draft with AI
+        </button>
+        <button
+          onClick={() => {
+            setComposing((c) => !c);
+            setAiOpen(false);
+          }}
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
           New email
         </button>
       </div>
+
+      {aiOpen && (
+        <AiDraftPanel
+          transactions={live}
+          people={people}
+          tasks={tasks}
+          documents={documents}
+          settings={settings}
+          onClose={() => setAiOpen(false)}
+          onCreated={(draft) => {
+            update((d) => ({ ...d, drafts: [...d.drafts, draft] }));
+            setTab("Drafts");
+            setDealFilter("all");
+            setAiOpen(false);
+          }}
+        />
+      )}
 
       {composing && (
         <Composer

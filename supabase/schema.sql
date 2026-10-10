@@ -57,14 +57,15 @@ create table if not exists public.email_drafts (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
   transaction_id uuid not null references public.transactions (id) on delete cascade,
-  recipient_id   uuid not null references public.people (id),
+  recipient_id   uuid references public.people (id),
   recipient_email text,
-  kind           text not null check (kind in ('welcome', 'follow-up')),
+  kind           text not null check (kind in ('welcome', 'follow-up', 'ai')),
   subject        text not null,
   body           text not null,
   status         text not null default 'draft' check (status in ('draft', 'approved', 'sent')),
   created_at     timestamptz not null default now(),
-  sent_at        timestamptz
+  sent_at        timestamptz,
+  ai_info        jsonb
 );
 
 create table if not exists public.settings (
@@ -94,6 +95,14 @@ alter table public.settings add column if not exists default_transaction_type te
   check (default_transaction_type in ('buyer', 'seller'));
 alter table public.settings add column if not exists follow_up_days integer not null default 7;
 alter table public.settings add column if not exists task_categories jsonb;
+
+-- AI drafting: a new kind of draft, the information it was written from, and
+-- drafts for people who aren't saved on the deal (a lender, a title officer).
+alter table public.email_drafts add column if not exists ai_info jsonb;
+alter table public.email_drafts alter column recipient_id drop not null;
+alter table public.email_drafts drop constraint if exists email_drafts_kind_check;
+alter table public.email_drafts add constraint email_drafts_kind_check
+  check (kind in ('welcome', 'follow-up', 'ai'));
 
 -- Indexes: make "all tasks for this deal" style lookups fast.
 create index if not exists transactions_user_idx on public.transactions (user_id);

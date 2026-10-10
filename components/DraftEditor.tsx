@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import AiSourcePanel from "@/components/AiSourcePanel";
 import { useToast } from "@/components/ToastProvider";
+import { hasGaps } from "@/lib/ai/check";
 import type { DraftActions } from "@/lib/data/drafts";
 import type { EmailDraft, Person } from "@/lib/types";
 
@@ -15,6 +17,9 @@ const styles = {
   approved: { bar: "border-l-emerald-500", badge: "bg-emerald-50 text-emerald-800", label: "Approved · ready for you to send" },
   sent: { bar: "border-l-slate-400", badge: "bg-slate-100 text-slate-700", label: "Marked as sent" },
 } as const;
+
+const kindLabel = (kind: EmailDraft["kind"]) =>
+  kind === "ai" ? "AI-assisted draft" : `${kind.replace("-", " ")} email`;
 
 const button =
   "rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40";
@@ -38,9 +43,23 @@ export default function DraftEditor({
   const [body, setBody] = useState(draft.body);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // For AI drafts: "I have checked the flagged details".
+  const [reviewed, setReviewed] = useState(false);
 
   const state = styles[draft.status];
   const sent = draft.status === "sent";
+  const info = draft.kind === "ai" ? draft.aiInfo : null;
+  const isAi = !!info;
+  // An AI draft can't be approved while it still has [ADD: ...] gaps, or until
+  // you've looked at anything it flagged as unconfirmed or not in the source.
+  const hasGapsNow = isAi && hasGaps(body);
+  const needsReview =
+    isAi && !!info && (info.warnings.length > 0 || info.facts.some((f) => f.unverified && info.usedFactIds.includes(f.id)));
+  const approveBlock = hasGapsNow
+    ? "Fill in the [ADD: …] gaps first."
+    : needsReview && !reviewed
+      ? "Tick the box above once you've checked the flagged details."
+      : "";
   const dirty =
     to !== (draft.recipientEmail || recipient?.email || "") ||
     subject !== draft.subject ||
@@ -77,7 +96,7 @@ export default function DraftEditor({
   async function copy() {
     try {
       await navigator.clipboard.writeText(`To: ${to}\nSubject: ${subject}\n\n${body}`);
-      toast("Copied. Paste it into your email app.");
+      toast(hasGapsNow ? "Copied, but it still has [ADD: …] gaps to fill in." : "Copied. Paste it into your email app.");
     } catch {
       toast("Your browser blocked copying. Select the text and copy it by hand.", "error");
     }
@@ -91,7 +110,7 @@ export default function DraftEditor({
         {sent && draft.sentAt && (
           <span className="text-xs text-slate-500">on {new Date(draft.sentAt).toLocaleString()}</span>
         )}
-        <span className="ml-auto text-xs capitalize text-slate-400">{draft.kind.replace("-", " ")} email</span>
+        <span className="ml-auto text-xs text-slate-400">{kindLabel(draft.kind)}</span>
       </div>
 
       <div className="space-y-3">
@@ -134,6 +153,18 @@ export default function DraftEditor({
 
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
 
+      {info && (
+        <div className="mt-4">
+          <AiSourcePanel info={info} />
+        </div>
+      )}
+      {needsReview && draft.status === "draft" && (
+        <label className="mt-3 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+          <input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-indigo-600" />
+          <span>I&apos;ve checked the flagged and unverified details against the contract and my records.</span>
+        </label>
+      )}
+
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {!sent && (
           <>
@@ -146,13 +177,15 @@ export default function DraftEditor({
             </button>
             {draft.status === "draft" && !dirty && (
               <button
-                onClick={() => run(() => actions.save({ ...draft, status: "approved" }), "Approved. Copy it and send it from your email app.")}
-                disabled={busy}
+                onClick={() => valid() && run(() => actions.save({ ...draft, status: "approved" }), "Approved. Copy it and send it from your email app.")}
+                disabled={busy || !!approveBlock}
+                title={approveBlock || undefined}
                 className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
               >
                 Approve
               </button>
             )}
+            {!isAi && (
             <button
               onClick={() => {
                 if (
@@ -168,6 +201,7 @@ export default function DraftEditor({
             >
               Regenerate
             </button>
+            )}
           </>
         )}
         <button onClick={copy} className={button}>
@@ -201,7 +235,9 @@ export default function DraftEditor({
       <p className="mt-3 text-xs text-slate-500">
         {sent
           ? "You sent this from your own email app and marked it here. TC Assistant doesn't send email."
-          : "TC Assistant never sends email. The text is filled in from your templates. Copy it into your email app, send it there, then mark it as sent here."}
+          : isAi
+            ? "TC Assistant never sends email. The AI wrote this draft; you are responsible for what it says. Copy it into your email app, send it there, then mark it as sent here."
+            : "TC Assistant never sends email. The text is filled in from your templates. Copy it into your email app, send it there, then mark it as sent here."}
       </p>
     </div>
   );

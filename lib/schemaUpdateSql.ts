@@ -10,6 +10,12 @@ alter table public.settings add column if not exists default_transaction_type te
 alter table public.settings add column if not exists follow_up_days integer not null default 7;
 alter table public.settings add column if not exists task_categories jsonb;
 
+alter table public.email_drafts add column if not exists ai_info jsonb;
+alter table public.email_drafts alter column recipient_id drop not null;
+alter table public.email_drafts drop constraint if exists email_drafts_kind_check;
+alter table public.email_drafts add constraint email_drafts_kind_check
+  check (kind in ('welcome', 'follow-up', 'ai'));
+
 create table if not exists public.templates (
   user_id    uuid primary key default auth.uid() references auth.users (id) on delete cascade,
   checklists jsonb not null,
