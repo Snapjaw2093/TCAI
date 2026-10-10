@@ -43,6 +43,7 @@ export function makeSampleData(): Database {
       price: 425000,
       notes: "First-time buyer. Prefers email over phone.",
       createdAt: day(-4),
+      archived: false,
     },
     {
       id: "t2",
@@ -56,6 +57,7 @@ export function makeSampleData(): Database {
       price: 610000,
       notes: "Buyer requested repairs after inspection.",
       createdAt: day(-12),
+      archived: false,
     },
   ];
 

@@ -14,13 +14,13 @@ import type {
 
 const shared: ChecklistTemplate = {
   tasks: [
-    { title: "Send welcome email to client and agent", key: "welcome-email" },
-    { title: "Confirm contract is fully executed", due: { anchor: "contract", dueDays: 1 } },
-    { title: "Open title / escrow", due: { anchor: "contract", dueDays: 2 } },
-    { title: "Deliver earnest money deposit", due: { anchor: "contract", dueDays: 3 } },
-    { title: "Order or confirm inspection", due: { anchor: "contract", dueDays: 5 } },
-    { title: "Final walk-through scheduled", due: { anchor: "closing", dueDays: -2 } },
-    { title: "Confirm closing time and location", due: { anchor: "closing", dueDays: -3 } },
+    { title: "Send welcome email to client and agent", category: "Communication", key: "welcome-email" },
+    { title: "Confirm contract is fully executed", category: "Contract", due: { anchor: "contract", dueDays: 1 } },
+    { title: "Open title / escrow", category: "Title & escrow", due: { anchor: "contract", dueDays: 2 } },
+    { title: "Deliver earnest money deposit", category: "Title & escrow", due: { anchor: "contract", dueDays: 3 } },
+    { title: "Order or confirm inspection", category: "Inspection & appraisal", due: { anchor: "contract", dueDays: 5 } },
+    { title: "Final walk-through scheduled", category: "Closing", due: { anchor: "closing", dueDays: -2 } },
+    { title: "Confirm closing time and location", category: "Closing", due: { anchor: "closing", dueDays: -3 } },
   ],
   documents: [
     { name: "Fully executed purchase agreement", required: true, due: { anchor: "contract", dueDays: 1 } },
@@ -33,9 +33,9 @@ export const defaultChecklistTemplates: ChecklistTemplates = {
   buyer: {
     tasks: [
       ...shared.tasks,
-      { title: "Confirm loan application submitted", due: { anchor: "contract", dueDays: 5 } },
-      { title: "Confirm appraisal ordered", due: { anchor: "contract", dueDays: 7 } },
-      { title: "Confirm homeowner's insurance bound", due: { anchor: "closing", dueDays: -10 } },
+      { title: "Confirm loan application submitted", category: "Financing", due: { anchor: "contract", dueDays: 5 } },
+      { title: "Confirm appraisal ordered", category: "Inspection & appraisal", due: { anchor: "contract", dueDays: 7 } },
+      { title: "Confirm homeowner's insurance bound", category: "Financing", due: { anchor: "closing", dueDays: -10 } },
     ],
     documents: [
       ...shared.documents,
@@ -47,9 +47,9 @@ export const defaultChecklistTemplates: ChecklistTemplates = {
   seller: {
     tasks: [
       ...shared.tasks,
-      { title: "Send seller disclosures to buyer's agent", due: { anchor: "contract", dueDays: 3 } },
-      { title: "Request payoff statement from lender", due: { anchor: "closing", dueDays: -14 } },
-      { title: "Confirm repair requests and responses", due: { anchor: "contract", dueDays: 12 } },
+      { title: "Send seller disclosures to buyer's agent", category: "Disclosures", due: { anchor: "contract", dueDays: 3 } },
+      { title: "Request payoff statement from lender", category: "Title & escrow", due: { anchor: "closing", dueDays: -14 } },
+      { title: "Confirm repair requests and responses", category: "Inspection & appraisal", due: { anchor: "contract", dueDays: 12 } },
     ],
     documents: [
       ...shared.documents,
@@ -89,6 +89,7 @@ export function buildChecklist(
       dueDate: dueDate(t.due, contractDate, closingDate),
       status: "open" as const,
       key: t.key,
+      category: t.category,
     })),
     documents: template.documents.map((d) => ({
       name: d.name,

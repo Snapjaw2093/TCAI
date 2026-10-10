@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useToast } from "@/components/ToastProvider";
 import { db } from "@/lib/data";
 import { applyTemplate, recalculateDueDates } from "@/lib/data/checklist";
+import { createWelcomeDrafts } from "@/lib/data/drafts";
 import type { Person, Transaction, TransactionType } from "@/lib/types";
 
 const inputClass =
@@ -63,7 +65,20 @@ export type EditTarget = {
 
 export default function TransactionForm({ editing }: { editing?: EditTarget }) {
   const router = useRouter();
+  const toast = useToast();
   const [type, setType] = useState<TransactionType>(editing?.transaction.type ?? "buyer");
+  // A new deal starts on the side chosen in Settings.
+  const [defaultType, setDefaultType] = useState<TransactionType>("buyer");
+
+  useEffect(() => {
+    if (editing) return;
+    async function init() {
+      const settings = await db.getSettings();
+      setDefaultType(settings.defaultTransactionType);
+      setType(settings.defaultTransactionType);
+    }
+    init();
+  }, [editing]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -117,11 +132,25 @@ export default function TransactionForm({ editing }: { editing?: EditTarget }) {
       clientId: client.id,
       agentId: agent.id,
       createdAt: new Date().toISOString().slice(0, 10),
+      archived: false,
     });
     await applyTemplate(transaction);
-    router.push(`/transactions/${transaction.id}`);
+    // Also start the welcome emails so onboarding can begin straight away.
+    let emailsCreated = true;
+    try {
+      await createWelcomeDrafts(transaction.id, client.id, agent.id);
+    } catch {
+      emailsCreated = false;
+    }
+    toast(
+      emailsCreated
+        ? "Transaction created. We generated the checklist and two welcome email drafts."
+        : "Transaction created with its checklist. The welcome emails couldn't be drafted yet.",
+      emailsCreated ? "success" : "error",
+    );
+    router.push(`/onboarding#deal-${transaction.id}`);
     formElement.reset();
-    setType("buyer");
+    setType(defaultType);
     setSaving(false);
   }
 

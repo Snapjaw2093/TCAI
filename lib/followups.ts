@@ -33,6 +33,7 @@ export function findFollowUps(
 
   const deals: DealFollowUps[] = [];
   for (const transaction of transactions) {
+    if (transaction.archived) continue;
     if (transaction.status !== "active" && transaction.status !== "pending") continue;
     const items: FollowUpItem[] = [];
 

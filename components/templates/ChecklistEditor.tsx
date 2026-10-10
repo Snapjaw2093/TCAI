@@ -99,9 +99,11 @@ function moveItem<T>(list: T[], from: number, to: number): T[] {
 
 export default function ChecklistEditor({
   templates,
+  categories,
   onChange,
 }: {
   templates: ChecklistTemplates;
+  categories: string[];
   onChange: (templates: ChecklistTemplates) => void;
 }) {
   const [side, setSide] = useState<TransactionType>("buyer");
@@ -140,6 +142,25 @@ export default function ChecklistEditor({
                 aria-label="Task name"
                 className={`${inputClass} min-w-0 flex-1 basis-full sm:basis-64`}
               />
+              <select
+                value={task.category ?? ""}
+                onChange={(e) =>
+                  update({
+                    ...template,
+                    tasks: template.tasks.map((t, j) => (j === i ? { ...t, category: e.target.value || undefined } : t)),
+                  })
+                }
+                aria-label="Category"
+                className={inputClass}
+              >
+                <option value="">No category</option>
+                {/* a category that was since removed from Settings stays selectable */}
+                {[...new Set([...categories, ...(task.category ? [task.category] : [])])].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
               <DueEditor
                 rule={task.due}
                 onChange={(due) =>

@@ -22,7 +22,7 @@ export async function applyTemplate(transaction: Transaction) {
 }
 
 // After a deal's dates change, moves the deadlines of its template tasks and
-// documents to match. Finished items keep the dates they had, and anything
+// documents to match (and fills in any missing task categories). Finished items keep the dates they had, and anything
 // you added yourself (not from the template) is left alone.
 export async function recalculateDueDates(transaction: Transaction) {
   const fresh = buildChecklist(
@@ -37,8 +37,16 @@ export async function recalculateDueDates(transaction: Transaction) {
   ]);
   for (const task of tasks) {
     const match = fresh.tasks.find((t) => t.title === task.title);
-    if (match && task.status === "open" && match.dueDate !== task.dueDate) {
-      await db.saveTask({ ...task, dueDate: match.dueDate });
+    if (!match) continue; // a task you added yourself
+    const moveDate = task.status === "open" && match.dueDate !== task.dueDate;
+    // Deals made before categories existed pick theirs up here.
+    const addCategory = !task.category && !!match.category;
+    if (moveDate || addCategory) {
+      await db.saveTask({
+        ...task,
+        dueDate: moveDate ? match.dueDate : task.dueDate,
+        category: task.category ?? match.category,
+      });
     }
   }
   for (const doc of documents) {

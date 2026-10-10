@@ -28,6 +28,9 @@ function load(): Db {
   return fresh as Db;
 }
 
+// Data saved by earlier versions of the app can lack newer fields.
+const withArchived = <T extends { archived?: boolean }>(t: T) => ({ ...t, archived: t.archived ?? false });
+
 function persist(db: Db) {
   window.localStorage.setItem(KEY, JSON.stringify(db));
 }
@@ -57,10 +60,11 @@ function forTransaction<T extends { transactionId: string }>(
 
 export const localStore: DataStore = {
   async listTransactions() {
-    return load().transactions;
+    return load().transactions.map(withArchived);
   },
   async getTransaction(id) {
-    return load().transactions.find((t) => t.id === id) ?? null;
+    const found = load().transactions.find((t) => t.id === id);
+    return found ? withArchived(found) : null;
   },
   async saveTransaction(t) {
     const db = load();
@@ -100,7 +104,11 @@ export const localStore: DataStore = {
   },
 
   async listDrafts(transactionId) {
-    return forTransaction(load().drafts, transactionId);
+    const db = load();
+    return forTransaction(db.drafts, transactionId).map((d) => ({
+      ...d,
+      recipientEmail: d.recipientEmail ?? db.people.find((p) => p.id === d.recipientId)?.email ?? "",
+    }));
   },
   async saveDraft(d) {
     const db = load();
@@ -132,6 +140,10 @@ export const localStore: DataStore = {
     const db = load();
     db.templates = templates;
     persist(db);
+  },
+
+  async checkSchema() {
+    return [];
   },
 
   async resetToSampleData() {

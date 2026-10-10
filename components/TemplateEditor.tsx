@@ -32,6 +32,7 @@ export default function TemplateEditor() {
   const [saved, setSaved] = useState<UserTemplates | null>(null);
   const [draft, setDraft] = useState<UserTemplates | null>(null);
   const [signature, setSignature] = useState("");
+  const [categories, setCategories] = useState<string[]>([]);
   const [tab, setTab] = useState<(typeof tabs)[number]>("Checklists");
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -41,7 +42,9 @@ export default function TemplateEditor() {
       const templates = await db.getTemplates();
       setSaved(templates);
       setDraft(templates);
-      setSignature(buildSignature(await db.getSettings()));
+      const settings = await db.getSettings();
+      setSignature(buildSignature(settings));
+      setCategories(settings.taskCategories);
     }
     load();
   }, []);
@@ -95,6 +98,7 @@ export default function TemplateEditor() {
       {tab === "Checklists" ? (
         <ChecklistEditor
           templates={draft.checklists}
+          categories={categories}
           onChange={(checklists) => setDraft({ ...draft, checklists })}
         />
       ) : (
