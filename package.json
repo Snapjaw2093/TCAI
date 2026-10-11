@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "tsx --test --test-reporter=spec \"lib/**/*.test.ts\"",
     "build:sql": "node scripts/build-sql.mjs",
-    "test:db": "bash scripts/test-db.sh"
+    "test:db": "bash scripts/test-db.sh",
+    "verify:supabase": "node scripts/verify-supabase.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

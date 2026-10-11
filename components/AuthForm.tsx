@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import Icon from "@/components/Icon";
+import { friendlyAuthError } from "@/lib/authMessages";
 import { supabase } from "@/lib/supabase";
 
 const inputClass =
@@ -25,10 +26,10 @@ export default function AuthForm() {
     setBusy(true);
     if (mode === "login") {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setError(error.message);
+      if (error) setError(friendlyAuthError(error.message));
     } else {
       const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) setError(error.message);
+      if (error) setError(friendlyAuthError(error.message));
       // With email confirmation on, there is no session until the link is clicked.
       else if (!data.session) setNotice("Check your email for a confirmation link, then log in.");
     }

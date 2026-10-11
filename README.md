@@ -25,6 +25,8 @@ Five pages, sharing one set of deals, tasks, documents and drafts:
 
 **Daily reminders:** with an account you can switch on a morning email of what's overdue and coming up (Settings → Daily reminders). It runs inside Supabase and needs a one-time setup: see [`supabase/README.md`](supabase/README.md#daily-reminder-emails).
 
+**Going live:** before real client details go in, work through [`docs/GO_LIVE.md`](docs/GO_LIVE.md): a separate production project, sign-in settings, separate website settings for test and real, and a live check of the access rules.
+
 **Honest about what it doesn't do:** TC Assistant never sends email. "Generate" fills in your templates with the deal's details; that button is not AI. The separate **Draft with AI** button writes a first draft with a language model (see [AI drafting](#ai-drafting)). A draft is only ever "marked as sent" because you sent it from your own email app and told the app. Nothing talks to Gmail or any other service.
 
 ## Project layout
