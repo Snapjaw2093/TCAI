@@ -325,19 +325,203 @@ begin
     (select count(*) from document_files where transaction_id = tmp_tx) = 0);
 end $$;
 
+-- ---- 6c. daily reminder emails ----
+do $$
+declare
+  alice constant uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
+  bob   constant uuid := 'bbbbbbbb-0000-0000-0000-000000000002';
+  a_tx uuid; b_tx uuid; n int; sent int; msg text; call jsonb; res text;
+  noon constant timestamptz := '2026-10-10 12:00:00+00';
+begin
+  select id into a_tx from transactions where user_id = alice limit 1;
+  select id into b_tx from transactions where user_id = bob limit 1;
+  delete from net.calls;
+  insert into reminder_config (id, app_url, from_address) values (1, 'https://app.example.test', 'TC Assistant <onboarding@resend.dev>') on conflict (id) do nothing;
+
+  -- some made-up work, due on different days (today in these tests is 2026-10-10)
+  perform tests.become(alice);
+  insert into tasks (transaction_id, title, due_date) values (a_tx, 'Alice overdue task', '2026-10-01');
+  insert into tasks (transaction_id, title, due_date) values (a_tx, E'Alice soon\ntask  with   spaces', '2026-10-12');
+  insert into tasks (transaction_id, title, due_date, status) values (a_tx, 'Alice finished task', '2026-10-02', 'done');
+  insert into documents (transaction_id, name, status, due_date) values (a_tx, 'Alice missing doc', 'needed', '2026-10-09');
+  insert into documents (transaction_id, name, status, due_date) values (a_tx, 'Alice received doc', 'received', '2026-10-09');
+  insert into documents (transaction_id, name, status, due_date) values (a_tx, 'Alice far-off doc', 'needed', '2026-10-30');
+  update transactions set closing_date = '2026-10-11' where id = a_tx;
+  perform tests.back();
+  perform tests.become(bob);
+  insert into tasks (transaction_id, title, due_date) values (b_tx, 'Bob overdue task', '2026-10-03');
+  perform tests.back();
+
+  -- turning it on is the person's own choice, and only for themselves
+  perform tests.check('Alice switches her reminders on, for noon UTC',
+    tests.touched(alice, 'update settings set reminders_enabled = true, reminder_hour = 12, reminder_timezone = ''UTC''') = 1);
+  perform tests.check('Bob does the same',
+    tests.touched(bob, 'update settings set reminders_enabled = true, reminder_hour = 12, reminder_timezone = ''UTC''') = 1);
+  msg := tests.refused(alice, 'update settings set reminder_hour = 25');
+  perform tests.check('an hour that does not exist is refused', msg is not null, coalesce(msg, 'it was allowed'));
+
+  -- when
+  sent := app_private.send_due_reminders('2026-10-10 11:00:00+00');
+  perform tests.check('nothing is sent before anyone''s chosen hour', sent = 0 and (select count(*) from net.calls) = 0);
+  sent := app_private.send_due_reminders(noon);
+  perform tests.check('at noon both people get exactly one email', sent = 2 and (select count(*) from net.calls) = 2);
+  sent := app_private.send_due_reminders(noon + interval '20 minutes');
+  perform tests.check('running again the same day sends nothing more', sent = 0 and (select count(*) from net.calls) = 2);
+
+  -- who and what
+  select body into call from net.calls where body->'to' ? 'alice@example.test';
+  perform tests.check('Alice''s email goes to her own login address and nobody else',
+    call is not null and jsonb_array_length(call->'to') = 1 and (select count(*) from net.calls where body->'to' ? 'alice@example.test') = 1);
+  perform tests.check('it is sent from the configured sender through the email service',
+    call->>'from' like '%onboarding@resend.dev%' and (select url from net.calls limit 1) = 'https://api.resend.com/emails'
+    and (select headers->>'Authorization' from net.calls limit 1) = 'Bearer re_test_fake_key');
+  perform tests.check('the subject says how many are overdue and coming up',
+    call->>'subject' = 'TC Assistant: 2 overdue, 2 coming up', call->>'subject');
+  perform tests.check('overdue and upcoming items are listed with plain-English timing',
+    (call->>'text') like '%Alice overdue task (9 days overdue)%' and (call->>'text') like '%Alice missing doc (1 day overdue)%'
+    and (call->>'text') like '%Alice soon task with spaces (due in 2 days)%' and (call->>'text') like '%Closing date (due in 1 day)%');
+  perform tests.check('finished tasks, received documents and far-off items are left out',
+    (call->>'text') not like '%finished%' and (call->>'text') not like '%received doc%' and (call->>'text') not like '%far-off%');
+  perform tests.check('Alice''s email contains none of Bob''s information',
+    (call->>'text') not like '%Bob%' and (call->>'text') not like '%bob@%');
+  select body into call from net.calls where body->'to' ? 'bob@example.test';
+  perform tests.check('Bob''s email contains only Bob''s items, to Bob',
+    (call->>'text') like '%Bob overdue task%' and (call->>'text') not like '%Alice%' and call->>'subject' = 'TC Assistant: 1 overdue, 0 coming up');
+
+  -- exclusions, time zones, choices
+  update transactions set archived = true where id = a_tx;
+  perform tests.check('archived deals add nothing to the digest', app_private.reminder_digest(alice, '2026-10-10') is null);
+  update transactions set archived = false, status = 'closed' where id = a_tx;
+  perform tests.check('closed deals add nothing either', app_private.reminder_digest(alice, '2026-10-10') is null);
+  update transactions set status = 'active' where id = a_tx;
+
+  delete from net.calls;
+  update reminder_state set last_sent = null;
+  perform tests.touched(bob, 'update settings set reminders_enabled = false');
+  sent := app_private.send_due_reminders(noon);
+  perform tests.check('someone who switched reminders off gets nothing', sent = 1 and not exists (select 1 from net.calls where body->'to' ? 'bob@example.test'));
+  perform tests.touched(alice, 'update settings set reminder_timezone = ''America/Los_Angeles'', reminder_hour = 5');
+  delete from net.calls;
+  update reminder_state set last_sent = null;
+  sent := app_private.send_due_reminders(noon);   -- noon UTC is 5am in Los Angeles in October
+  perform tests.check('the chosen hour is the person''s own local hour (5am Los Angeles = noon UTC)', sent = 1);
+  update reminder_state set last_sent = null; delete from net.calls;
+  perform tests.touched(alice, 'update settings set reminder_timezone = ''Not/AZone''');
+  sent := app_private.send_due_reminders(noon);
+  perform tests.check('a bad time zone is skipped without breaking anyone else''s email', sent = 0);
+  perform tests.touched(alice, 'update settings set reminder_timezone = ''UTC'', reminder_hour = 12');
+
+  -- a person with nothing due is skipped entirely
+  update reminder_state set last_sent = null; delete from net.calls;
+  update tasks set status = 'done' where user_id = bob;
+  perform tests.touched(bob, 'update settings set reminders_enabled = true');
+  perform tests.touched(alice, 'update settings set reminders_enabled = false');
+  sent := app_private.send_due_reminders(noon);
+  perform tests.check('a person with nothing due gets no email that day', sent = 0 and (select count(*) from net.calls) = 0);
+  update tasks set status = 'open' where user_id = bob;
+  perform tests.touched(alice, 'update settings set reminders_enabled = true');
+  update reminder_state set last_sent = null;
+
+  -- setup not finished: no key, no crash, nothing marked as sent
+  delete from net.calls; update reminder_state set last_sent = null;
+  delete from vault.decrypted_secrets where name = 'resend_api_key';
+  sent := app_private.send_due_reminders(noon);
+  perform tests.check('with no email key stored nothing is sent and nothing is marked as sent',
+    sent = 0 and (select count(*) from net.calls) = 0 and not exists (select 1 from reminder_state where last_sent is not null));
+  insert into vault.decrypted_secrets values ('resend_api_key', 're_test_fake_key');
+
+  -- who may run what
+  perform tests.become(alice);
+  begin
+    perform app_private.send_due_reminders(noon);
+    perform tests.back(); raise exception 'FAIL  a logged-in user could run the scheduled sender';
+  exception when insufficient_privilege then perform tests.back(); raise notice 'PASS  a logged-in user cannot run the scheduled sender'; end;
+  perform tests.become(alice);
+  begin
+    perform app_private.deliver_reminder(bob, current_date, true);
+    perform tests.back(); raise exception 'FAIL  a logged-in user could send an email for someone else';
+  exception when insufficient_privilege then perform tests.back(); raise notice 'PASS  a logged-in user cannot send an email for someone else'; end;
+  perform tests.become(alice);
+  begin
+    perform count(*) from reminder_config;
+    perform tests.back(); raise exception 'FAIL  a logged-in user could read the reminder setup';
+  exception when insufficient_privilege then perform tests.back(); raise notice 'PASS  a logged-in user cannot read the reminder setup'; end;
+  perform tests.become(alice);
+  begin
+    perform count(*) from reminder_state;
+    perform tests.back(); raise exception 'FAIL  a logged-in user could read the reminder bookkeeping';
+  exception when insufficient_privilege then perform tests.back(); raise notice 'PASS  nor the bookkeeping (so nobody can reset "already sent today")'; end;
+  perform tests.become(alice);
+  begin
+    update reminder_state set last_sent = null;
+    perform tests.back(); raise exception 'FAIL  a logged-in user could edit the reminder bookkeeping';
+  exception when insufficient_privilege then perform tests.back(); raise notice 'PASS  nor edit it'; end;
+  perform tests.become_anon();
+  begin
+    perform public.send_test_reminder();
+    perform tests.back(); raise exception 'FAIL  a visitor could use the test button';
+  exception when insufficient_privilege then perform tests.back(); raise notice 'PASS  a signed-out visitor cannot use the test button'; end;
+  perform tests.become('00000000-0000-0000-0000-000000000000');
+  perform tests.back();
+
+  -- the test button
+  delete from net.calls; delete from reminder_state;
+  perform tests.become(alice);
+  res := public.send_test_reminder();
+  perform tests.back();
+  perform tests.check('the test button emails Alice, and only Alice',
+    res = 'sent' and (select count(*) from net.calls) = 1 and exists (select 1 from net.calls where body->'to' ? 'alice@example.test'));
+  perform tests.become(alice);
+  begin
+    perform public.send_test_reminder();
+    perform tests.back(); raise exception 'FAIL  two tests in a row were allowed';
+  exception when others then perform tests.back();
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'PASS  a second test straight away is refused (%)', sqlerrm;
+  end;
+  update reminder_state set test_at = now() - interval '10 minutes' where user_id = alice;
+  perform tests.become(alice); perform public.send_test_reminder(); perform tests.back();
+  update reminder_state set test_at = now() - interval '10 minutes' where user_id = alice;
+  perform tests.become(alice); perform public.send_test_reminder(); perform tests.back();
+  update reminder_state set test_at = now() - interval '10 minutes' where user_id = alice;
+  perform tests.become(alice); perform public.send_test_reminder(); perform tests.back();
+  update reminder_state set test_at = now() - interval '10 minutes' where user_id = alice;
+  perform tests.become(alice); perform public.send_test_reminder(); perform tests.back();   -- the 5th today
+  update reminder_state set test_at = now() - interval '10 minutes' where user_id = alice;
+  perform tests.become(alice);
+  begin
+    perform public.send_test_reminder();
+    perform tests.back(); raise exception 'FAIL  a sixth test in one day was allowed';
+  exception when others then perform tests.back();
+    if sqlerrm like 'FAIL%' then raise; end if;
+    raise notice 'PASS  a sixth test in one day is refused (%)', sqlerrm;
+  end;
+
+  -- a test sends even when nothing is due, so the setup can always be checked
+  delete from net.calls; update reminder_state set test_at = null, test_count = 0 where user_id = alice;
+  update tasks set status = 'done' where user_id = alice;
+  update documents set status = 'received' where user_id = alice;
+  update transactions set closing_date = null where user_id = alice;
+  perform tests.become(alice); res := public.send_test_reminder(); perform tests.back();
+  perform tests.check('with nothing due, the test still sends a short "nothing is due" email',
+    res = 'sent' and (select body->>'subject' from net.calls limit 1) = 'TC Assistant: nothing is due');
+end $$;
+
 -- ---- 7. deleting things cleans up only what belongs to them ----
 do $$
 declare
   alice constant uuid := 'aaaaaaaa-0000-0000-0000-000000000001';
   bob   constant uuid := 'bbbbbbbb-0000-0000-0000-000000000002';
-  tx uuid;
+  tx uuid; a_deals bigint; a_tasks bigint;
 begin
   select id into tx from transactions where user_id = bob limit 1;
+  select count(*) into a_deals from transactions where user_id = alice;
+  select count(*) into a_tasks from tasks where user_id = alice;
   perform tests.check('Bob deletes one of his own deals', tests.touched(bob, format('delete from transactions where id = %L', tx)) = 1);
   perform tests.check('its tasks, documents and drafts went with it',
     tests.rows_for(bob, 'select * from tasks') = 0 and tests.rows_for(bob, 'select * from documents') = 0 and tests.rows_for(bob, 'select * from email_drafts') = 0);
   perform tests.check('Alice''s records are untouched',
-    tests.rows_for(alice, 'select * from transactions') = 1 and tests.rows_for(alice, 'select * from tasks') = 1);
+    tests.rows_for(alice, 'select * from transactions') = a_deals and tests.rows_for(alice, 'select * from tasks') = a_tasks);
   delete from auth.users where id = bob;
   perform tests.check('closing Bob''s account removes all of Bob''s data',
     (select count(*) from people where user_id = bob) = 0 and (select count(*) from settings where user_id = bob) = 0);
@@ -346,7 +530,11 @@ end $$;
 
 -- ---- 8. structural guards: new tables can't be added without locks ----
 do $$
-declare r record; bad text := '';
+declare
+  r record; bad text := '';
+  -- Server-only tables: row level security on, deliberately NO policies, and no
+  -- privileges for anyone but the server. Anything else needs a real policy.
+  server_only constant text[] := array['reminder_state', 'reminder_config'];
 begin
   for r in
     select c.relname, c.relrowsecurity,
@@ -354,13 +542,25 @@ begin
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'
   loop
-    if not r.relrowsecurity or r.policies = 0 then bad := bad || ' ' || r.relname; end if;
+    if not r.relrowsecurity then bad := bad || ' ' || r.relname;
+    elsif r.policies = 0 and not (r.relname = any (server_only)) then bad := bad || ' ' || r.relname;
+    end if;
   end loop;
-  perform tests.check('every public table has row level security on and at least one policy', bad = '', 'unprotected:' || bad);
+  perform tests.check('every public table has row level security on, and a policy unless it is server-only', bad = '', 'unprotected:' || bad);
+  perform tests.check('server-only tables have no policies at all',
+    not exists (select 1 from pg_policies where schemaname = 'public' and tablename = any (server_only)));
   perform tests.check('no policy applies to the anonymous or public role',
     not exists (select 1 from pg_policies where schemaname = 'public' and (roles && array['anon', 'public']::name[])));
   perform tests.check('the anonymous role has no table privileges at all',
     not exists (select 1 from information_schema.role_table_grants where table_schema = 'public' and grantee in ('anon', 'PUBLIC')));
+  perform tests.check('logged-in users have no privileges on the server-only tables',
+    not exists (select 1 from information_schema.role_table_grants where table_schema = 'public' and table_name = any (server_only) and grantee = 'authenticated'));
+  perform tests.check('the only function logged-in users can run is send_test_reminder (plus the helper the policies use)',
+    not exists (
+      select 1 from information_schema.routine_privileges
+      where routine_schema in ('public', 'app_private') and grantee in ('anon', 'PUBLIC', 'authenticated')
+        and routine_name not in ('send_test_reminder')
+    ));
 end $$;
 
 drop schema tests cascade;

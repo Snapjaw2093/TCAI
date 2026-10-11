@@ -12,25 +12,22 @@ import type { DocumentFile, DocumentItem } from "@/lib/types";
 // that only the signed-in owner can open, and each download link works for a minute.
 
 export default function FilesPanel({
-  transactionId,
   documents,
   files,
-  onUploaded,
+  busy,
+  onUpload,
   onRemoved,
-  onDocumentReceived,
 }: {
-  transactionId: string;
   documents: DocumentItem[];
   files: DocumentFile[];
-  onUploaded: (file: DocumentFile) => void;
+  busy: string;
+  onUpload: (files: File[], documentId: string | null, markReceived: boolean) => Promise<void>;
   onRemoved: (id: string) => void;
-  onDocumentReceived: (doc: DocumentItem) => void;
 }) {
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [documentId, setDocumentId] = useState("");
   const [markReceived, setMarkReceived] = useState(true);
-  const [busy, setBusy] = useState("");
   const [dragging, setDragging] = useState(false);
 
   const chosen = documents.find((d) => d.id === documentId);
@@ -52,23 +49,7 @@ export default function FilesPanel({
   }
 
   async function upload(list: FileList | File[]) {
-    const picked = Array.from(list);
-    for (const file of picked) {
-      setBusy(file.name);
-      try {
-        const saved = await db.uploadFile(transactionId, documentId || null, file);
-        onUploaded(saved);
-        if (chosen && markReceived && chosen.status !== "received") {
-          const updated = { ...chosen, status: "received" as const };
-          await db.saveDocument(updated);
-          onDocumentReceived(updated);
-        }
-        toast(`Uploaded ${saved.fileName}.`);
-      } catch (e) {
-        toast(`Couldn't upload ${file.name}: ${e instanceof Error ? e.message : "unknown error"}`, "error");
-      }
-    }
-    setBusy("");
+    await onUpload(Array.from(list), documentId || null, markReceived);
     if (input.current) input.current.value = "";
   }
 

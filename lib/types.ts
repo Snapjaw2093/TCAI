@@ -104,6 +104,10 @@ export type Settings = {
   followUpDays: number;
   // The labels tasks can be filed under.
   taskCategories: string[];
+  // A daily email listing what is overdue or coming up (accounts only).
+  remindersEnabled: boolean;
+  reminderHour: number; // 0-23, in reminderTimezone
+  reminderTimezone: string; // e.g. "America/New_York"
 };
 
 export const defaultSettings: Settings = {
@@ -113,6 +117,9 @@ export const defaultSettings: Settings = {
   defaultTransactionType: "buyer",
   followUpDays: 7,
   taskCategories: defaultTaskCategories,
+  remindersEnabled: false,
+  reminderHour: 8,
+  reminderTimezone: "America/New_York",
 };
 
 // ---- Templates you can edit on the Templates page ----

@@ -220,6 +220,13 @@ export async function importDatabase(source: Db) {
 }
 
 export const supabaseStore: DataStore = {
+  // The email is sent by the database itself, to the logged-in person's own address.
+  async sendTestReminder() {
+    const { data, error } = await client().rpc("send_test_reminder");
+    if (error) throw new Error(error.message || "Couldn't send the test email.");
+    return data === "sent" ? "sent" : "unconfigured";
+  },
+
   filesSupported: true,
 
   async listFiles(transactionId) {
@@ -325,6 +332,9 @@ export const supabaseStore: DataStore = {
       defaultTransactionType: data.default_transaction_type === "seller" ? "seller" : "buyer",
       followUpDays: Number(data.follow_up_days) || defaultSettings.followUpDays,
       taskCategories: categories.length ? categories : defaultSettings.taskCategories,
+      remindersEnabled: Boolean(data.reminders_enabled),
+      reminderHour: Number.isInteger(Number(data.reminder_hour)) ? Number(data.reminder_hour) : defaultSettings.reminderHour,
+      reminderTimezone: str(data.reminder_timezone) || defaultSettings.reminderTimezone,
     };
   },
   // One settings row per account: update it if it exists, otherwise add it.
@@ -337,6 +347,9 @@ export const supabaseStore: DataStore = {
       default_transaction_type: settings.defaultTransactionType,
       follow_up_days: settings.followUpDays,
       task_categories: settings.taskCategories,
+      reminders_enabled: settings.remindersEnabled,
+      reminder_hour: settings.reminderHour,
+      reminder_timezone: settings.reminderTimezone,
     };
     const existing = check(await c.from("settings").select("user_id").maybeSingle()) as Row | null;
     if (existing) {
@@ -375,6 +388,7 @@ export const supabaseStore: DataStore = {
       ["settings", "default_transaction_type"],
       ["settings", "follow_up_days"],
       ["settings", "task_categories"],
+      ["settings", "reminders_enabled"],
       ["templates", "user_id"],
       ["document_files", "storage_path"],
     ];

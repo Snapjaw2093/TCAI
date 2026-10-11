@@ -109,7 +109,21 @@ export function validateSettings(s: Settings): Settings {
   if (!Number.isInteger(s.followUpDays) || s.followUpDays < 1 || s.followUpDays > 365) {
     throw new ValidationError("The follow-up window must be between 1 and 365 days.");
   }
+  if (!Number.isInteger(s.reminderHour) || s.reminderHour < 0 || s.reminderHour > 23) {
+    throw new ValidationError("The reminder hour must be between 0 and 23.");
+  }
+  if (!isTimeZone(s.reminderTimezone)) throw new ValidationError("That time zone isn't recognised.");
   return s;
+}
+
+export function isTimeZone(zone: unknown): boolean {
+  if (typeof zone !== "string" || zone.length === 0 || zone.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Wraps a store so every save is checked first. Everything else passes straight through.

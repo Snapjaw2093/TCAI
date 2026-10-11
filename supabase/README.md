@@ -18,6 +18,7 @@ Think of the database as an apartment building. Each account gets its own apartm
 | `settings` | One row per account: signature, defaults | none |
 | `templates` | One row per account: edited checklists and email wording | none |
 | `document_files` | One row per uploaded file: name, type, size, where it is stored, and optionally which checklist document it satisfies | `transactions`, `documents` (optional) |
+| `reminder_state`, `reminder_config` | Server-only bookkeeping and setup for reminder emails (no one but the server can read or write them) | none |
 | `app_schema_version` | Read-only marker the app uses to notice when the database is behind | none |
 
 Every table except `app_schema_version` has `user_id uuid not null default auth.uid() references auth.users on delete cascade`. Closing an account deletes all of its data.
@@ -64,6 +65,27 @@ Files are kept in a **private** Supabase Storage bucket, `deal-documents`. Nothi
 - **Demo mode:** uploads need an account; the browser-only demo has nowhere safe to keep files and says so.
 
 Check that the bucket exists (Storage → Buckets: `deal-documents`, marked **Private**) after running the setup SQL.
+
+## Daily reminder emails
+
+Everyone can switch on a daily email (**Settings → Daily reminders**) listing what's overdue and coming up in their follow-up window, with the same rules as the Follow-ups page. Nothing is sent on days when nothing is due.
+
+**How it works, and why it is built this way.** A scheduled job *inside Supabase* (`pg_cron`) runs every hour and asks the database function `app_private.send_due_reminders()` to email everyone whose chosen hour it is, in their own time zone, once per day. The email goes out through [Resend](https://resend.com) via `pg_net`. Because it all runs inside the database, **no master (service-role) key is needed anywhere in the app**, and the Resend key is kept in Supabase Vault.
+
+**Safety rules (tested in `supabase/tests/access_control.sql`):**
+- Emails only ever go to the account's own login address, never to an address typed into a form, so the feature can't be used to email strangers.
+- A digest contains only that account's own items.
+- The sending functions live in a schema the API doesn't expose, and logged-in users and visitors have no permission to run them. The one exception is `send_test_reminder()` (the **Send me a test email** button), which takes no arguments, can only email the person logged in, and is limited to one per 2 minutes and 5 per day.
+- Settings that control "already sent today" and the test limits live in a table users can't read or write.
+- Whether email is sent never depends on the browser: turning it off in Settings is checked by the database each hour.
+
+**One-time setup (about 10 minutes):**
+1. **Resend:** create a free account at resend.com and an API key (Sending access). For first tests you can send from `onboarding@resend.dev`, which, as far as I know, Resend only lets you use to email **your own Resend sign-up address** (check their current rules), so use the same email for your TC Assistant login while testing. To email other addresses later, add and verify your own domain in Resend and use an address on it.
+2. **Supabase extensions:** Database → Extensions → enable **pg_cron** and **pg_net**. (Vault is on by default; if not, enable `supabase_vault`.)
+3. Run `schema.sql` (it includes migration 0004), then open [`reminders-schedule.sql`](reminders-schedule.sql), follow its comments (store the key in Vault, set the app URL and sender, schedule the hourly job), and run it.
+4. In the app: **Settings → Daily reminders**, switch on, pick the hour and time zone, **Save**, then **Send me a test email**. It should arrive within a minute (check spam the first time).
+
+**Limits and caveats:** Resend's free plan has daily and monthly caps; the sender is skipped if a send fails and won't retry the same day. `pg_net` sends asynchronously, so a failed send shows up in Supabase under `net._http_response` rather than in the app. Emails are plain text.
 
 ## Setup
 
@@ -112,6 +134,7 @@ Migrations are numbered, idempotent SQL files in [`migrations/`](migrations/):
 | `0001_initial.sql` | Tables, per-account RLS policies, and the later additive columns (archive, categories, AI drafts) |
 | `0002_security_hardening.sql` | Removes all anonymous access, same-account foreign keys, input limits, version marker |
 | `0003_document_files.sql` | File uploads: the private `deal-documents` storage bucket, the `document_files` table, and the locks on stored files |
+| `0004_daily_reminders.sql` | Daily reminder emails: settings columns, server-only tables, the scheduled sender, and the "send a test email" button |
 
 To add one: create `migrations/0003_what_it_does.sql` (write it so running it twice is harmless), bump the version marker at its end (`insert into app_schema_version ... on conflict do nothing`), then run:
 
@@ -138,4 +161,4 @@ The script **wipes** the database it connects to, so it refuses any URL that loo
 
 ### What has and has not been tested
 
-Tested: the SQL access tests above (including the storage locks on stored files, with a stand-in for Supabase Storage's database tables); the same attacks sent over HTTP through a real PostgREST (the layer Supabase uses) with real signed tokens; the app's flows against that hardened database; the upgrade path from the original schema. **Not** tested: Supabase's real Storage service (uploads and signed links were tested against a stand-in; only the database-side locks are exercised for real), a real Supabase project, Supabase's hosted Auth (email confirmation, password policy, rate limits), or load. Before storing real client records, repeat the access checks against your own `tcai-prod` project with two real test accounts, and review the settings in step 3.
+Tested: the SQL access tests above (including the storage locks on stored files, with a stand-in for Supabase Storage's database tables, and the reminder logic with a stand-in that records the emails instead of sending them); the same attacks sent over HTTP through a real PostgREST (the layer Supabase uses) with real signed tokens; the app's flows against that hardened database; the upgrade path from the original schema. **Not** tested: Resend, `pg_cron` and `pg_net` for real (the email was captured, not delivered), Supabase's real Storage service (uploads and signed links were tested against a stand-in; only the database-side locks are exercised for real), a real Supabase project, Supabase's hosted Auth (email confirmation, password policy, rate limits), or load. Before storing real client records, repeat the access checks against your own `tcai-prod` project with two real test accounts, and review the settings in step 3.

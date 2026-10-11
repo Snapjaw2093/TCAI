@@ -31,4 +31,10 @@ test("rejects missing, oversized and malformed input with a readable message", (
   throwsFriendly(() => validateDraft({ transactionId: "t", subject: "s".repeat(limits.subject + 1) } as never), /too long/i);
   throwsFriendly(() => validateSettings({ ...defaultSettings, followUpDays: 0 }), /1 and 365/);
   throwsFriendly(() => validateSettings({ ...defaultSettings, followUpDays: 2.5 }), /1 and 365/);
+  throwsFriendly(() => validateSettings({ ...defaultSettings, reminderHour: 24 }), /between 0 and 23/);
+  throwsFriendly(() => validateSettings({ ...defaultSettings, reminderHour: -1 }), /between 0 and 23/);
+  throwsFriendly(() => validateSettings({ ...defaultSettings, reminderHour: 8.5 }), /between 0 and 23/);
+  throwsFriendly(() => validateSettings({ ...defaultSettings, reminderTimezone: "Mars/Olympus" }), /time zone/);
+  throwsFriendly(() => validateSettings({ ...defaultSettings, reminderTimezone: "" }), /time zone/);
+  validateSettings({ ...defaultSettings, remindersEnabled: true, reminderHour: 17, reminderTimezone: "Europe/London" });
 });
