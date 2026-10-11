@@ -1,0 +1,38 @@
+name: Verify Supabase access rules
+
+# A button you press by hand (Actions tab → this workflow → Run workflow). It signs in as
+# two TEST accounts on a Supabase project and tries to read, change and plant each other's
+# records and files, to prove the access rules work on the real project.
+# Settings it needs are stored as repository secrets: see docs/GO_LIVE.md.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type yes-this-is-a-test-project to confirm the accounts below are throwaway test accounts"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the checks
+        run: npm run verify:supabase
+        env:
+          VERIFY_CONFIRM: ${{ inputs.confirm }}
+          SUPABASE_URL: ${{ secrets.VERIFY_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VERIFY_SUPABASE_PUBLISHABLE_KEY }}
+          VERIFY_USER_A_EMAIL: ${{ secrets.VERIFY_USER_A_EMAIL }}
+          VERIFY_USER_A_PASSWORD: ${{ secrets.VERIFY_USER_A_PASSWORD }}
+          VERIFY_USER_B_EMAIL: ${{ secrets.VERIFY_USER_B_EMAIL }}
+          VERIFY_USER_B_PASSWORD: ${{ secrets.VERIFY_USER_B_PASSWORD }}
+          APP_URL: ${{ vars.VERIFY_APP_URL }}

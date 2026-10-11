@@ -28,6 +28,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${jakarta.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
+        {/* Set NEXT_PUBLIC_APP_ENV=test on test and preview deployments so nobody
+            mistakes them for the real site and types in real client details. */}
+        {process.env.NEXT_PUBLIC_APP_ENV === "test" && (
+          <div className="sticky top-0 z-50 bg-amber-400 px-4 py-1.5 text-center text-xs font-bold text-amber-950">
+            TEST SITE: use made-up data only. Nothing here is real.
+          </div>
+        )}
         <ToastProvider>
           <AuthGate>{children}</AuthGate>
         </ToastProvider>

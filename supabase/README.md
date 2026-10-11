@@ -159,6 +159,10 @@ The script **wipes** the database it connects to, so it refuses any URL that loo
 
 `npm test` (no database needed) also checks that the setup files are in sync with the migrations, that no code uses a service-role key or a secret under a `NEXT_PUBLIC_` name, validation, and the protected server routes against a pretend Supabase.
 
+### Checking a real Supabase project
+
+`npm run verify:supabase` (also available as a button: GitHub → Actions → "Verify Supabase access rules") signs in as **two throwaway test accounts** on a real project and tries, through the live API, to read, change, delete, plant and reference each other's records and files, to read as a signed-out visitor, to upload forbidden or oversize files, and to reach the server-only reminder pieces. It cleans up what it creates and exits with an error if any check fails. It only needs the public (publishable) key. The step-by-step is in [`docs/GO_LIVE.md`](../docs/GO_LIVE.md), Part 6. It was verified to catch deliberately broken rules (an over-wide read policy, a removed same-account link, anonymous access, over-wide file records).
+
 ### What has and has not been tested
 
 Tested: the SQL access tests above (including the storage locks on stored files, with a stand-in for Supabase Storage's database tables, and the reminder logic with a stand-in that records the emails instead of sending them); the same attacks sent over HTTP through a real PostgREST (the layer Supabase uses) with real signed tokens; the app's flows against that hardened database; the upgrade path from the original schema. **Not** tested: Resend, `pg_cron` and `pg_net` for real (the email was captured, not delivered), Supabase's real Storage service (uploads and signed links were tested against a stand-in; only the database-side locks are exercised for real), a real Supabase project, Supabase's hosted Auth (email confirmation, password policy, rate limits), or load. Before storing real client records, repeat the access checks against your own `tcai-prod` project with two real test accounts, and review the settings in step 3.
