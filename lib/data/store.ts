@@ -43,6 +43,9 @@ export interface DataStore {
   saveDraft(d: EmailDraft | NewRecord<EmailDraft>): Promise<EmailDraft>;
   deleteDraft(id: string): Promise<void>;
 
+  // Emails the logged-in person their reminder right now (a test). Accounts only.
+  sendTestReminder(): Promise<"sent" | "unconfigured">;
+
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;
 

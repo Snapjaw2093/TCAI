@@ -1,13 +1,20 @@
+import { db } from "@/lib/data";
+import { acceptAttribute } from "@/lib/data/files";
 import { formatDate, isOverdue } from "@/lib/format";
 import type { DocumentFile, DocumentItem } from "@/lib/types";
 
 export default function DocumentList({
   documents,
   files = [],
+  busy = "",
+  onAttach,
   onChange,
 }: {
   documents: DocumentItem[];
   files?: DocumentFile[];
+  busy?: string;
+  // Called with the chosen files and the document they were chosen for.
+  onAttach?: (files: File[], documentId: string) => void;
   onChange: (document: DocumentItem) => void;
 }) {
   return (
@@ -28,6 +35,25 @@ export default function DocumentList({
               {late && "Overdue · "}
               {doc.dueDate ? formatDate(doc.dueDate) : "No due date"}
             </span>
+            {db.filesSupported && onAttach && (
+              <label
+                className={`inline-flex cursor-pointer items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1 text-sm font-bold text-indigo-700 hover:bg-indigo-100 ${busy ? "pointer-events-none opacity-50" : ""}`}
+              >
+                Attach file
+                <input
+                  type="file"
+                  multiple
+                  accept={acceptAttribute}
+                  aria-label={`Attach a file to ${doc.name}`}
+                  disabled={Boolean(busy)}
+                  onChange={(e) => {
+                    if (e.target.files?.length) onAttach(Array.from(e.target.files), doc.id);
+                    e.target.value = "";
+                  }}
+                  className="sr-only"
+                />
+              </label>
+            )}
             <select
               value={doc.status}
               onChange={(e) =>

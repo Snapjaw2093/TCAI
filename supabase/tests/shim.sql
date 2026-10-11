@@ -5,6 +5,9 @@
 drop schema if exists public cascade;
 drop schema if exists auth cascade;
 drop schema if exists storage cascade;
+drop schema if exists app_private cascade;
+drop schema if exists net cascade;
+drop schema if exists vault cascade;
 create schema public;
 create schema auth;
 create schema storage;
@@ -45,3 +48,14 @@ alter table storage.objects enable row level security;
 grant usage on schema storage to anon, authenticated;
 grant all on storage.objects, storage.buckets to anon, authenticated;
 grant execute on function storage.foldername(text) to anon, authenticated;
+
+-- Stand-ins for the email plumbing: pg_net records what it WOULD have sent, and
+-- Vault holds a fake key. Neither is reachable by the anon / authenticated roles.
+create schema net;
+create table net.calls (id serial primary key, url text, headers jsonb, body jsonb);
+create function net.http_post(url text, body jsonb default '{}', params jsonb default '{}',
+                              headers jsonb default '{}', timeout_milliseconds int default 5000)
+returns bigint language sql as $$ insert into net.calls (url, headers, body) values (url, headers, body) returning id::bigint $$;
+create schema vault;
+create table vault.decrypted_secrets (name text, decrypted_secret text);
+insert into vault.decrypted_secrets values ('resend_api_key', 're_test_fake_key');

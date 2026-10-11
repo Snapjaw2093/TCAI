@@ -119,6 +119,32 @@ export default function TransactionDetail({ id }: { id: string }) {
     }
   }
 
+  const [uploading, setUploading] = useState("");
+
+  // Uploads each file in turn. If it was for a checklist item and the person wants
+  // it, that item is marked received.
+  async function uploadFiles(picked: File[], documentId: string | null, markReceived: boolean) {
+    if (!data) return;
+    let doc = data.documents.find((d) => d.id === documentId);
+    for (const file of picked) {
+      setUploading(file.name);
+      try {
+        const saved = await db.uploadFile(id, documentId, file);
+        update((d) => ({ ...d, files: [saved, ...d.files] }));
+        if (doc && markReceived && doc.status !== "received") {
+          const received = { ...doc, status: "received" as const };
+          await db.saveDocument(received);
+          update((d) => ({ ...d, documents: d.documents.map((x) => (x.id === received.id ? received : x)) }));
+          doc = received;
+        }
+        toast(`Uploaded ${saved.fileName}.`);
+      } catch (e) {
+        fail(`upload ${file.name}`, e);
+      }
+    }
+    setUploading("");
+  }
+
   async function updateDocument(doc: DocumentItem) {
     try {
       await db.saveDocument(doc);
@@ -332,15 +358,20 @@ export default function TransactionDetail({ id }: { id: string }) {
               </button>
             </div>
           ) : (
-            <DocumentList documents={documents} files={files} onChange={updateDocument} />
+            <DocumentList
+              documents={documents}
+              files={files}
+              busy={uploading}
+              onAttach={(picked, documentId) => uploadFiles(picked, documentId, true)}
+              onChange={updateDocument}
+            />
           )}
           <FilesPanel
-            transactionId={t.id}
             documents={documents}
             files={files}
-            onUploaded={(file) => update((d) => ({ ...d, files: [file, ...d.files] }))}
+            busy={uploading}
+            onUpload={uploadFiles}
             onRemoved={(fileId) => update((d) => ({ ...d, files: d.files.filter((x) => x.id !== fileId) }))}
-            onDocumentReceived={(doc) => update((d) => ({ ...d, documents: d.documents.map((x) => (x.id === doc.id ? doc : x)) }))}
           />
         </>
       ) : tab === "Checklist" ? (

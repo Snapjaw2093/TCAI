@@ -61,6 +61,9 @@ function forTransaction<T extends { transactionId: string }>(
 const noFiles = () => new Error("Uploads need an account. In this browser-only demo there is nowhere safe to keep files.");
 
 export const localStore: DataStore = {
+  sendTestReminder: async () => {
+    throw new Error("Reminder emails need an account.");
+  },
   filesSupported: false,
   listFiles: async () => [],
   uploadFile: async () => {

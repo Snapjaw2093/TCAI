@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useMemo, useState, type FormEvent } from "react";
 import { ErrorPanel, Loading } from "@/components/LoadState";
 import { useToast } from "@/components/ToastProvider";
 import { db, usingSupabase } from "@/lib/data";
 import { clearLocalDatabase, readLocalDatabase } from "@/lib/data/localStore";
+import { isTimeZone } from "@/lib/data/validate";
 import { importDatabase } from "@/lib/data/supabaseStore";
 import { supabase } from "@/lib/supabase";
 import { buildSignature } from "@/lib/templates/emails";
@@ -16,6 +17,16 @@ const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 const card = "space-y-4 rounded-xl border border-slate-200 bg-white p-6";
 
+const hourLabel = (h: number) => `${h % 12 === 0 ? 12 : h % 12}:00 ${h < 12 ? "AM" : "PM"}`;
+const localZone = () => {
+  const z = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return isTimeZone(z) ? z : "America/New_York";
+};
+function timeZones(): string[] {
+  const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  return all.length ? all : ["America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "UTC"];
+}
+
 export default function SettingsForm() {
   const router = useRouter();
   const toast = useToast();
@@ -24,11 +35,18 @@ export default function SettingsForm() {
   const [newCategory, setNewCategory] = useState("");
   // How many deals are saved in this browser (only checked when using Supabase).
   const [browserDeals, setBrowserDeals] = useState(0);
+  const [email, setEmail] = useState("");
+  const [testing, setTesting] = useState(false);
+  const zones = useMemo(() => timeZones(), []);
 
   const loader = useCallback(async () => {
     const settings = await db.getSettings();
     setDraft((d) => d ?? settings); // keep edits if the page reloads in the background
-    if (usingSupabase) setBrowserDeals(readLocalDatabase()?.transactions.length ?? 0);
+    if (usingSupabase) {
+      setBrowserDeals(readLocalDatabase()?.transactions.length ?? 0);
+      const { data } = (await supabase?.auth.getUser()) ?? { data: { user: null } };
+      setEmail(data.user?.email ?? "");
+    }
     return settings;
   }, []);
   const { data: saved, error, loading, reload } = useLoad(loader);
@@ -40,6 +58,22 @@ export default function SettingsForm() {
   const baseline = justSaved ?? saved;
   const dirty = JSON.stringify(draft) !== JSON.stringify(baseline);
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => setDraft({ ...draft, [key]: value });
+
+  async function sendTest() {
+    setTesting(true);
+    try {
+      const result = await db.sendTestReminder();
+      toast(
+        result === "sent"
+          ? `Test email on its way to ${email || "your login email"}. It can take a minute; check spam too.`
+          : "Reminder emails aren't set up on the server yet. See \"Daily reminder emails\" in supabase/README.md.",
+        result === "sent" ? "success" : "error",
+      );
+    } catch (err) {
+      toast(`Couldn't send the test: ${err instanceof Error ? err.message : "unknown error"}`, "error");
+    }
+    setTesting(false);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -188,6 +222,93 @@ export default function SettingsForm() {
           <p className="text-xs text-slate-500">
             Transaction types are buyer and seller. Each has its own checklist under the Templates tab.
           </p>
+        </section>
+
+        <section className={card}>
+          <h2 className="font-medium text-slate-900">Daily reminders</h2>
+          {!usingSupabase ? (
+            <p className="text-sm text-slate-500">
+              Reminder emails need an account (this demo keeps everything in your browser, so there is nothing to email
+              from). Log in to an account to switch them on.
+            </p>
+          ) : (
+            <>
+              <label className="flex items-start gap-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={draft.remindersEnabled}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      remindersEnabled: e.target.checked,
+                      // First time on: use this computer's time zone instead of the default.
+                      reminderTimezone:
+                        e.target.checked && draft.reminderTimezone === "America/New_York" ? localZone() : draft.reminderTimezone,
+                    })
+                  }
+                  aria-label="Email me a daily reminder"
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-slate-900">Email me a daily reminder</span>
+                  <span className="block text-slate-500">
+                    A short list of what&apos;s overdue and coming up in the next {draft.followUpDays} days, sent to{" "}
+                    <strong>{email || "your login email"}</strong>. Nothing is sent on days when nothing is due.
+                  </span>
+                </span>
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-slate-700">Send at</span>
+                  <select
+                    value={draft.reminderHour}
+                    onChange={(e) => set("reminderHour", Number(e.target.value))}
+                    aria-label="Reminder hour"
+                    disabled={!draft.remindersEnabled}
+                    className={`${inputClass} disabled:opacity-50`}
+                  >
+                    {Array.from({ length: 24 }, (_, h) => (
+                      <option key={h} value={h}>
+                        {hourLabel(h)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-slate-700">Time zone</span>
+                  <select
+                    value={draft.reminderTimezone}
+                    onChange={(e) => set("reminderTimezone", e.target.value)}
+                    aria-label="Reminder time zone"
+                    disabled={!draft.remindersEnabled}
+                    className={`${inputClass} disabled:opacity-50`}
+                  >
+                    {(zones.includes(draft.reminderTimezone) || !isTimeZone(draft.reminderTimezone)
+                      ? zones
+                      : [draft.reminderTimezone, ...zones]
+                    ).map((z) => (
+                      <option key={z} value={z}>
+                        {z.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={sendTest}
+                  disabled={testing || dirty}
+                  className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                >
+                  {testing ? "Sending…" : "Send me a test email"}
+                </button>
+                <span className="text-xs text-slate-500">
+                  {dirty ? "Save your settings first, then send a test." : "Checks that email is working. Limited to a few a day."}
+                </span>
+              </div>
+            </>
+          )}
         </section>
 
         <section className={card}>
